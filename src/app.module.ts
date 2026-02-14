@@ -14,6 +14,11 @@ import { CurrenciesModule } from './modules/currencies/currencies.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ValidationPipe } from './common/pipes/validation.pipe';
+import { RegistersModule } from './modules/registers/registers.module';
+import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module';
+import { InvoicesService } from './modules/invoices/invoices.service';
+import { InvoicesController } from './modules/invoices/invoices.controller';
+import { InvoicesModule } from './modules/invoices/invoices.module';
 
 // Common
 
@@ -31,8 +36,11 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
     SuppliersModule,
     ProductsModule,
     CurrenciesModule,
+    RegistersModule,
+    CashSessionsModule,
+    InvoicesModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, InvoicesController],
   providers: [
     AppService,
     // ============ GLOBAL INTERCEPTORS ============
@@ -50,6 +58,7 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
       provide: APP_PIPE,
       useClass: ValidationPipe,
     },
+    InvoicesService,
   ],
 })
 export class AppModule {}
