@@ -10,6 +10,7 @@ import {
   Min,
   Max,
   MaxLength,
+  IsBoolean,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -38,6 +39,15 @@ export class CreateSupplierDto {
   @IsNotEmpty()
   @MaxLength(100)
   contactName: string;
+
+  @ApiPropertyOptional({
+    description: 'Statut actif/inactif',
+    example: true,
+    default: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 
   @ApiProperty({
     description: 'Email du contact',
