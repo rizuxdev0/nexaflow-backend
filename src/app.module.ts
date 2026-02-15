@@ -16,9 +16,9 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ValidationPipe } from './common/pipes/validation.pipe';
 import { RegistersModule } from './modules/registers/registers.module';
 import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module';
-import { InvoicesService } from './modules/invoices/invoices.service';
-import { InvoicesController } from './modules/invoices/invoices.controller';
 import { InvoicesModule } from './modules/invoices/invoices.module';
+import { CustomersModule } from './modules/customers/customers.module';
+import { ShopModule } from './modules/shop/shop.module';
 
 // Common
 
@@ -32,15 +32,23 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 
     // ============ MODULES DE L'APPLICATION ============
     DatabaseModule,
+
+    // Phase 1
     CategoriesModule,
     SuppliersModule,
     ProductsModule,
     CurrenciesModule,
+
+    // Phase 2
     RegistersModule,
     CashSessionsModule,
     InvoicesModule,
+
+    // Phase 3
+    CustomersModule,
+    ShopModule,
   ],
-  controllers: [AppController, InvoicesController],
+  controllers: [AppController],
   providers: [
     AppService,
     // ============ GLOBAL INTERCEPTORS ============
@@ -58,7 +66,6 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
       provide: APP_PIPE,
       useClass: ValidationPipe,
     },
-    InvoicesService,
   ],
 })
 export class AppModule {}

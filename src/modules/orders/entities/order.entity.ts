@@ -1,18 +1,100 @@
-import { CashSession } from 'src/modules/cash-sessions/entities/cash-session.entity';
 import {
-  Column,
   Entity,
-  JoinColumn,
-  ManyToOne,
   PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
 } from 'typeorm';
+import { OrderItem } from './order-item.entity';
+import { CashSession } from 'src/modules/cash-sessions/entities/cash-session.entity';
+import { Customer } from 'src/modules/customers/entities/customer.entity';
 
-// Ajouter ces champs à votre entité Order existante
+export enum OrderStatus {
+  DRAFT = 'draft',
+  CONFIRMED = 'confirmed',
+  PROCESSING = 'processing',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+  REFUNDED = 'refunded',
+}
+
+export enum PaymentStatus {
+  PENDING = 'pending',
+  PAID = 'paid',
+  FAILED = 'failed',
+  REFUNDED = 'refunded',
+}
+
 @Entity('orders')
 export class Order {
-  // ... vos champs existants ...
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ unique: true })
+  orderNumber: string;
+
+  @ManyToOne(() => Customer, { nullable: true })
+  @JoinColumn({ name: 'customerId' })
+  customer: Customer;
+
+  @Column({ nullable: true })
+  customerId: string;
+
+  @Column({ nullable: true })
+  customerName: string;
+
+  @Column({ nullable: true })
+  customerEmail: string;
+
+  @Column({ nullable: true })
+  customerPhone: string;
+
+  @Column({ nullable: true, type: 'text' })
+  shippingAddress: string;
+
+  @Column({ nullable: true })
+  shippingCity: string;
+
+  @Column({ nullable: true })
+  shippingCountry: string;
+
+  @Column({ nullable: true, type: 'text' })
+  notes: string;
+
+  @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
+  items: OrderItem[];
+
+  @Column({ type: 'decimal', precision: 10, scale: 0 })
+  subtotal: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 0, default: 0 })
+  taxTotal: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 0, default: 0 })
+  discountTotal: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 0 })
+  total: number;
+
+  @Column({
+    type: 'enum',
+    enum: OrderStatus,
+    default: OrderStatus.DRAFT,
+  })
+  status: OrderStatus;
+
+  @Column({
+    type: 'enum',
+    enum: PaymentStatus,
+    default: PaymentStatus.PENDING,
+  })
+  paymentStatus: PaymentStatus;
+
+  @Column({ nullable: true })
+  paymentMethod: string;
 
   @Column({ nullable: true })
   sessionId: string;
@@ -21,5 +103,18 @@ export class Order {
   @JoinColumn({ name: 'sessionId' })
   session: CashSession;
 
-  // ... reste des champs ...
+  @Column({ nullable: true })
+  invoiceId: string;
+
+  @Column()
+  orderDate: Date;
+
+  @Column({ nullable: true })
+  paidAt: Date;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
