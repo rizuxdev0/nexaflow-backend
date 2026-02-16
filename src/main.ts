@@ -12,6 +12,7 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as express from 'express';
 import { join } from 'path';
+import { port } from './common/variable/global';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -93,8 +94,8 @@ async function bootstrap() {
 
   // ============ START SERVER ============
 
-  const port = process.env.PORT || 3003;
-  await app.listen(port);
+  // const port = process.env.PORT || 3003;
+  await app.listen(port || process.env.PORT);
   console.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
   console.log(`📚 Swagger documentation: http://localhost:${port}/api/v1/docs`);
 }

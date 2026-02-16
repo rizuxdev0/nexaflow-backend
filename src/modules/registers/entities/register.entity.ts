@@ -1,4 +1,5 @@
 import { CashSession } from 'src/modules/cash-sessions/entities/cash-session.entity';
+import { User } from 'src/modules/users/entities/user.entity';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -6,6 +7,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  JoinColumn,
+  ManyToOne,
 } from 'typeorm';
 
 // Note: User sera importé du module auth quand il sera créé
@@ -32,10 +35,9 @@ export class Register {
   @Column({ nullable: true })
   assignedUserId: string;
 
-  // À décommenter quand le module User sera créé
-  // @ManyToOne(() => User, { nullable: true })
-  // @JoinColumn({ name: 'assignedUserId' })
-  // assignedUser: User;
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'assignedUserId' })
+  assignedUser: User;
 
   @OneToMany(() => CashSession, (session) => session.register)
   sessions: CashSession[];

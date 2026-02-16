@@ -25,6 +25,7 @@ import { UpdateSupplierDto } from './dto/update-supplier.dto';
 import { Supplier } from './entities/supplier.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('suppliers')
 @Controller('suppliers')

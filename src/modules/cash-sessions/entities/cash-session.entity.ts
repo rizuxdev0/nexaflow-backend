@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { Register } from '../../registers/entities/register.entity';
 import { Order } from '../../orders/entities/order.entity';
+import { User } from 'src/modules/users/entities/user.entity';
 
 export enum SessionStatus {
   OPEN = 'open',
@@ -30,9 +31,9 @@ export class CashSession {
   registerId: string;
 
   // À décommenter quand User sera créé
-  // @ManyToOne(() => User)
-  // @JoinColumn({ name: 'userId' })
-  // user: User;
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'userId' })
+  user: User;
 
   @Column()
   userId: string;

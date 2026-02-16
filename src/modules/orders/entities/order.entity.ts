@@ -11,7 +11,7 @@ import {
 import { OrderItem } from './order-item.entity';
 import { CashSession } from 'src/modules/cash-sessions/entities/cash-session.entity';
 import { Customer } from 'src/modules/customers/entities/customer.entity';
-
+import { User } from 'src/modules/users/entities/user.entity';
 export enum OrderStatus {
   DRAFT = 'draft',
   CONFIRMED = 'confirmed',
@@ -63,6 +63,13 @@ export class Order {
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @ManyToOne(() => User, (user) => user.orders)
+  @JoinColumn({ name: 'userId' })
+  user: User;
+
+  @Column()
+  userId: string;
 
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })
   items: OrderItem[];
