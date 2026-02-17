@@ -29,6 +29,8 @@ import { PermissionsModule } from './modules/permissions/permissions.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { AuditModule } from './modules/audit/audit.module';
+import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 // Common
 
@@ -63,6 +65,9 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
     UsersModule,
     PermissionsModule,
     RolesModule,
+
+    // Phase 5 - Audit et rapports
+    AuditModule,
   ],
   controllers: [AppController, UsersController, RolesController],
   providers: [
@@ -84,6 +89,12 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
       provide: APP_INTERCEPTOR,
       useClass: TransformInterceptor,
     },
+
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor, // ← Ajouter l'intercepteur d'audit
+    },
+
     // ============ GLOBAL FILTERS ============
     {
       provide: APP_FILTER,

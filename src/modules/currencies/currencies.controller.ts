@@ -25,14 +25,18 @@ import { UpdateCurrencyDto } from './dto/update-currency.dto';
 import { Currency } from './entities/currency.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
+import { Roles } from 'src/common/decorators/roles.decorator';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 @ApiTags('currencies')
 @Controller('currencies')
 @ApiBearerAuth()
+@Roles('admin', 'super_admin')
 export class CurrenciesController {
   constructor(private readonly currenciesService: CurrenciesService) {}
 
   @Post()
+  @Permissions('settings.create')
   @ApiOperation({ summary: 'Créer une nouvelle devise' })
   @ApiResponse({ status: 201, description: 'Devise créée avec succès' })
   @ApiResponse({ status: 409, description: 'Code déjà existant' })
@@ -42,6 +46,7 @@ export class CurrenciesController {
   }
 
   @Get()
+  @Permissions('settings.read')
   @ApiOperation({ summary: 'Liste paginée des devises' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
@@ -63,6 +68,7 @@ export class CurrenciesController {
   }
 
   @Get('default')
+  @Permissions('settings.read')
   @ApiOperation({ summary: 'Obtenir la devise par défaut' })
   @ApiResponse({ status: 200, description: 'Devise par défaut' })
   @ApiResponse({ status: 404, description: 'Aucune devise par défaut trouvée' })
@@ -104,6 +110,7 @@ export class CurrenciesController {
   }
 
   @Get(':id')
+  @Permissions('settings.read')
   @ApiOperation({ summary: "Détail d'une devise" })
   @ApiParam({ name: 'id', description: 'ID de la devise' })
   @ApiResponse({ status: 200, description: 'Devise trouvée' })
@@ -113,6 +120,7 @@ export class CurrenciesController {
   }
 
   @Get('code/:code')
+  @Permissions('settings.read')
   @ApiOperation({ summary: "Détail d'une devise par son code" })
   @ApiParam({ name: 'code', description: 'Code de la devise (ex: XOF)' })
   @ApiResponse({ status: 200, description: 'Devise trouvée' })
@@ -122,6 +130,7 @@ export class CurrenciesController {
   }
 
   @Put(':id')
+  @Permissions('settings.update')
   @ApiOperation({ summary: 'Modifier une devise' })
   @ApiParam({ name: 'id', description: 'ID de la devise' })
   @ApiResponse({ status: 200, description: 'Devise modifiée' })
@@ -135,6 +144,7 @@ export class CurrenciesController {
   }
 
   @Delete(':id')
+  @Permissions('settings.delete')
   @ApiOperation({ summary: 'Supprimer une devise' })
   @ApiParam({ name: 'id', description: 'ID de la devise' })
   @ApiResponse({ status: 204, description: 'Devise supprimée' })
@@ -146,6 +156,7 @@ export class CurrenciesController {
   }
 
   @Patch(':id/toggle')
+  @Permissions('settings.update')
   @ApiOperation({ summary: 'Activer/Désactiver une devise' })
   @ApiParam({ name: 'id', description: 'ID de la devise' })
   @ApiResponse({ status: 200, description: 'Statut modifié' })
@@ -159,6 +170,7 @@ export class CurrenciesController {
   }
 
   @Patch(':id/set-default')
+  @Permissions('settings.update')
   @ApiOperation({ summary: 'Définir une devise comme défaut' })
   @ApiParam({ name: 'id', description: 'ID de la devise' })
   @ApiResponse({ status: 200, description: 'Devise définie comme défaut' })

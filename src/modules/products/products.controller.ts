@@ -26,13 +26,22 @@ import { UpdateStockDto } from './dto/update-stock.dto';
 import { Product } from './entities/product.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
+import { VariantsService } from './variants.service';
+import { VariantResponseDto } from './dto/variant-response.dto';
+import { UpdateVariantDto } from './dto/update-variant.dto';
+import { CreateVariantDto } from './dto/create-variant.dto';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
 
 @ApiTags('products')
 @Controller('products')
 @ApiBearerAuth()
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly variantsService: VariantsService,
+  ) {}
 
+  // ============ ENDPOINTS POUR PRODUITS ============
   @Post()
   @ApiOperation({ summary: 'Créer un nouveau produit' })
   @ApiResponse({ status: 201, description: 'Produit créé avec succès' })
@@ -222,5 +231,104 @@ export class ProductsController {
   @HttpCode(HttpStatus.CREATED)
   duplicate(@Param('id') id: string): Promise<Product> {
     return this.productsService.duplicateProduct(id);
+  }
+
+  // ============ ENDPOINTS POUR VARIANTES ============
+
+  @Get(':id/variants')
+  @Permissions('products.read')
+  @ApiOperation({ summary: "Liste des variantes d'un produit" })
+  @ApiParam({ name: 'id', description: 'ID du produit' })
+  @ApiResponse({ status: 200, description: 'Liste des variantes' })
+  async findVariants(@Param('id') id: string): Promise<VariantResponseDto[]> {
+    return this.variantsService.findAll(id);
+  }
+
+  @Post(':id/variants')
+  @Permissions('products.create')
+  @ApiOperation({ summary: 'Ajouter une variante à un produit' })
+  @ApiParam({ name: 'id', description: 'ID du produit' })
+  @ApiResponse({ status: 201, description: 'Variante créée' })
+  @ApiResponse({ status: 409, description: 'SKU déjà existant' })
+  @HttpCode(HttpStatus.CREATED)
+  async createVariant(
+    @Param('id') id: string,
+    @Body() createVariantDto: CreateVariantDto,
+  ): Promise<VariantResponseDto> {
+    const variant = await this.variantsService.create(id, createVariantDto);
+    const product = await this.productsService.findOne(id);
+    return this.variantsService['mapToResponseDto'](variant, product.price);
+  }
+
+  @Get(':id/variants/:variantId')
+  @Permissions('products.read')
+  @ApiOperation({ summary: "Détail d'une variante" })
+  @ApiParam({ name: 'id', description: 'ID du produit' })
+  @ApiParam({ name: 'variantId', description: 'ID de la variante' })
+  @ApiResponse({ status: 200, description: 'Variante trouvée' })
+  @ApiResponse({ status: 404, description: 'Variante non trouvée' })
+  async findOneVariant(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+  ): Promise<VariantResponseDto> {
+    const variant = await this.variantsService.findOne(variantId);
+    const product = await this.productsService.findOne(id);
+    return this.variantsService['mapToResponseDto'](variant, product.price);
+  }
+
+  @Put(':id/variants/:variantId')
+  @Permissions('products.update')
+  @ApiOperation({ summary: 'Modifier une variante' })
+  @ApiParam({ name: 'id', description: 'ID du produit' })
+  @ApiParam({ name: 'variantId', description: 'ID de la variante' })
+  @ApiResponse({ status: 200, description: 'Variante modifiée' })
+  @ApiResponse({ status: 404, description: 'Variante non trouvée' })
+  @ApiResponse({ status: 409, description: 'SKU déjà existant' })
+  async updateVariant(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+    @Body() updateVariantDto: UpdateVariantDto,
+  ): Promise<VariantResponseDto> {
+    const variant = await this.variantsService.update(
+      id,
+      variantId,
+      updateVariantDto,
+    );
+    const product = await this.productsService.findOne(id);
+    return this.variantsService['mapToResponseDto'](variant, product.price);
+  }
+
+  @Delete(':id/variants/:variantId')
+  @Permissions('products.delete')
+  @ApiOperation({ summary: 'Supprimer une variante' })
+  @ApiParam({ name: 'id', description: 'ID du produit' })
+  @ApiParam({ name: 'variantId', description: 'ID de la variante' })
+  @ApiResponse({ status: 204, description: 'Variante supprimée' })
+  @ApiResponse({ status: 404, description: 'Variante non trouvée' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeVariant(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+  ): Promise<void> {
+    return this.variantsService.remove(id, variantId);
+  }
+
+  @Patch(':id/variants/:variantId/stock')
+  @Permissions('products.update')
+  @ApiOperation({ summary: "Mettre à jour le stock d'une variante" })
+  @ApiParam({ name: 'id', description: 'ID du produit' })
+  @ApiParam({ name: 'variantId', description: 'ID de la variante' })
+  @ApiResponse({ status: 200, description: 'Stock mis à jour' })
+  async updateVariantStock(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+    @Body() updateStockDto: UpdateStockDto,
+  ): Promise<VariantResponseDto> {
+    const variant = await this.variantsService.updateStock(
+      variantId,
+      updateStockDto.quantity,
+    );
+    const product = await this.productsService.findOne(id);
+    return this.variantsService['mapToResponseDto'](variant, product.price);
   }
 }

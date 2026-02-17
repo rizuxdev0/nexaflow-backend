@@ -6,6 +6,7 @@ import { Product } from './entities/product.entity';
 import { ProductVariant } from './entities/product-variant.entity';
 import { CategoriesModule } from '../categories/categories.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
+import { VariantsService } from './variants.service';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
     SuppliersModule, // Pour utiliser SuppliersService
   ],
   controllers: [ProductsController],
-  providers: [ProductsService],
-  exports: [ProductsService],
+  providers: [ProductsService, VariantsService], // ← Ajout de VariantsService
+  exports: [ProductsService, VariantsService],
 })
 export class ProductsModule {}
