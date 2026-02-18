@@ -9,13 +9,46 @@ import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class ValidationPipe implements PipeTransform<any> {
+  // async transform(value: any, { metatype }: ArgumentMetadata) {
+  //   if (!metatype || !this.toValidate(metatype)) {
+  //     return value;
+  //   }
+
+  //   const object = plainToInstance(metatype, value);
+  //   const errors = await validate(object as object, {
+  //     whitelist: true,
+  //     forbidNonWhitelisted: true,
+  //   });
+
+  //   if (errors.length > 0) {
+  //     const messages = errors.map((error) => {
+  //       const constraints = error.constraints
+  //         ? Object.values(error.constraints).join(', ')
+  //         : 'Invalid value';
+  //       return `${error.property}: ${constraints}`;
+  //     });
+
+  //     throw new BadRequestException({
+  //       message: 'Validation failed',
+  //       errors: messages,
+  //     });
+  //   }
+
+  //   return object;
+  // }
   async transform(value: any, { metatype }: ArgumentMetadata) {
     if (!metatype || !this.toValidate(metatype)) {
       return value;
     }
 
+    // 🔥 AJOUT IMPORTANT
+    if (value === null || value === undefined) {
+      return value;
+    }
+
     const object = plainToInstance(metatype, value);
-    const errors = await validate(object, {
+
+    const errors = await validate(object as object, {
       whitelist: true,
       forbidNonWhitelisted: true,
     });
