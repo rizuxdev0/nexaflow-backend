@@ -31,7 +31,15 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
-
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { StoreConfigModule } from './modules/store-config/store-config.module';
+import { BannersModule } from './modules/banners/banners.module';
+import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { PromosModule } from './modules/promos/promos.module';
+import { PackagesModule } from './modules/packages/packages.module';
+import { ReturnsModule } from './modules/returns/returns.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
+import { DeferredPaymentsModule } from './modules/deferred-payments/deferred-payments.module';
 // Common
 
 @Module({
@@ -41,6 +49,13 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
       isGlobal: true,
       envFilePath: ['.env', '.env.development', '.env.production'],
     }),
+
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60,
+        limit: 100,
+      },
+    ]),
 
     // ============ MODULES DE L'APPLICATION ============
     DatabaseModule,
@@ -68,15 +83,27 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
     // Phase 5 - Audit et rapports
     AuditModule,
+
+    StoreConfigModule,
+    BannersModule,
+    LoyaltyModule,
+    PromosModule,
+    PackagesModule,
+    ReturnsModule,
+    ReviewsModule,
+    DeferredPaymentsModule,
   ],
   controllers: [AppController, UsersController, RolesController],
   providers: [
     AppService,
     // ============ GLOBAL INTERCEPTORS ============
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard, // Vérifie l'authentification
     },
+
+    { provide: APP_GUARD, useClass: RolesGuard },
     {
       provide: APP_GUARD,
       useClass: RolesGuard, // Vérifie les rôles

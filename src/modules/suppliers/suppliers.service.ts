@@ -1,3 +1,243 @@
+// import {
+//   Injectable,
+//   NotFoundException,
+//   ConflictException,
+//   BadRequestException,
+// } from '@nestjs/common';
+// import { InjectRepository } from '@nestjs/typeorm';
+// import { Repository, Like, FindOptionsWhere } from 'typeorm';
+// import { Supplier } from './entities/supplier.entity';
+// import { CreateSupplierDto } from './dto/create-supplier.dto';
+// import { UpdateSupplierDto } from './dto/update-supplier.dto';
+// import {
+//   PaginatedResponse,
+//   PaginatedResponseBuilder,
+// } from '../../common/interfaces/paginated-response.interface';
+
+// type SupplierWithCount = Supplier & { productsCount: number };
+// @Injectable()
+// export class SuppliersService {
+//   constructor(
+//     @InjectRepository(Supplier)
+//     private suppliersRepository: Repository<Supplier>,
+//   ) {}
+
+//   async create(createSupplierDto: CreateSupplierDto): Promise<Supplier> {
+//     // Vérifier si le code existe déjà
+//     const existingCode = await this.suppliersRepository.findOne({
+//       where: { code: createSupplierDto.code },
+//     });
+
+//     if (existingCode) {
+//       throw new ConflictException(
+//         `Un fournisseur avec le code "${createSupplierDto.code}" existe déjà`,
+//       );
+//     }
+
+//     // Vérifier si l'email existe déjà
+//     const existingEmail = await this.suppliersRepository.findOne({
+//       where: { email: createSupplierDto.email },
+//     });
+
+//     if (existingEmail) {
+//       throw new ConflictException(
+//         `Un fournisseur avec l'email "${createSupplierDto.email}" existe déjà`,
+//       );
+//     }
+
+//     const supplier = this.suppliersRepository.create(createSupplierDto);
+//     return await this.suppliersRepository.save(supplier);
+//   }
+
+//   //   async findAll(
+//   //     page: number = 1,
+//   //     pageSize: number = 20,
+//   //     search?: string,
+//   //     isActive?: boolean,
+//   //   ): Promise<PaginatedResponse<Supplier>> {
+//   //     const where: FindOptionsWhere<Supplier> = {};
+
+//   //     if (search) {
+//   //       where.name = Like(`%${search}%`);
+//   //     }
+
+//   //     if (isActive !== undefined) {
+//   //       where.isActive = isActive;
+//   //     }
+
+//   //     const [data, total] = await this.suppliersRepository.findAndCount({
+//   //       where,
+//   //       skip: (page - 1) * pageSize,
+//   //       take: pageSize,
+//   //       order: { name: 'ASC' },
+//   //       relations: ['products'],
+//   //     });
+
+//   //     // Ajouter le compteur de produits
+//   //     const dataWithCounts = data.map((supplier) => ({
+//   //       ...supplier,
+//   //       productsCount: supplier.products?.length || 0,
+//   //       products: undefined, // Ne pas envoyer la liste complète des produits
+//   //     }));
+
+//   //     return PaginatedResponseBuilder.build(
+//   //       dataWithCounts,
+//   //       total,
+//   //       page,
+//   //       pageSize,
+//   //     );
+//   //   }
+//   async findAll(
+//     page: number = 1,
+//     pageSize: number = 20,
+//     search?: string,
+//     isActive?: boolean,
+//   ): Promise<PaginatedResponse<SupplierWithCount>> {
+//     // ← Type plus précis
+//     const where: FindOptionsWhere<Supplier> = {};
+
+//     if (search) {
+//       where.name = Like(`%${search}%`);
+//     }
+
+//     if (isActive !== undefined) {
+//       where.isActive = isActive;
+//     }
+
+//     const [data, total] = await this.suppliersRepository.findAndCount({
+//       where,
+//       skip: (page - 1) * pageSize,
+//       take: pageSize,
+//       order: { name: 'ASC' },
+//       // Ne pas charger les produits pour éviter les données inutiles
+//     });
+
+//     // Compter les produits pour chaque fournisseur
+//     const dataWithCounts: SupplierWithCount[] = await Promise.all(
+//       data.map(async (supplier) => {
+//         const result = await this.suppliersRepository
+//           .createQueryBuilder('supplier')
+//           .leftJoin('supplier.products', 'products')
+//           .where('supplier.id = :id', { id: supplier.id })
+//           .select('COUNT(products.id)', 'count')
+//           .getRawOne();
+
+//         return {
+//           ...supplier,
+//           productsCount: parseInt(result?.count) || 0,
+//         };
+//       }),
+//     );
+
+//     return PaginatedResponseBuilder.build(
+//       dataWithCounts,
+//       total,
+//       page,
+//       pageSize,
+//     );
+//   }
+
+//   //   async findOne(id: string): Promise<Supplier> {
+//   //     const supplier = await this.suppliersRepository.findOne({
+//   //       where: { id },
+//   //       relations: ['products'],
+//   //     });
+
+//   //     if (!supplier) {
+//   //       throw new NotFoundException(`Fournisseur avec l'ID "${id}" non trouvé`);
+//   //     }
+
+//   //     return supplier;
+//   //   }
+//   async findOne(id: string): Promise<Supplier> {
+//     const supplier = await this.suppliersRepository.findOne({
+//       where: { id },
+//       relations: ['products'], // ← Ici on charge les produits
+//     });
+
+//     if (!supplier) {
+//       throw new NotFoundException(`Fournisseur avec l'ID "${id}" non trouvé`);
+//     }
+
+//     return supplier;
+//   }
+//   async update(
+//     id: string,
+//     updateSupplierDto: UpdateSupplierDto,
+//   ): Promise<Supplier> {
+//     const supplier = await this.findOne(id);
+
+//     // Vérifier l'unicité du code si modifié
+//     if (updateSupplierDto.code && updateSupplierDto.code !== supplier.code) {
+//       const existingCode = await this.suppliersRepository.findOne({
+//         where: { code: updateSupplierDto.code },
+//       });
+
+//       if (existingCode && existingCode.id !== id) {
+//         throw new ConflictException(
+//           `Un fournisseur avec le code "${updateSupplierDto.code}" existe déjà`,
+//         );
+//       }
+//     }
+
+//     // Vérifier l'unicité de l'email si modifié
+//     if (updateSupplierDto.email && updateSupplierDto.email !== supplier.email) {
+//       const existingEmail = await this.suppliersRepository.findOne({
+//         where: { email: updateSupplierDto.email },
+//       });
+
+//       if (existingEmail && existingEmail.id !== id) {
+//         throw new ConflictException(
+//           `Un fournisseur avec l'email "${updateSupplierDto.email}" existe déjà`,
+//         );
+//       }
+//     }
+
+//     Object.assign(supplier, updateSupplierDto);
+//     return await this.suppliersRepository.save(supplier);
+//   }
+
+//   async remove(id: string): Promise<void> {
+//     const supplier = await this.findOne(id);
+
+//     // Vérifier si le fournisseur a des produits
+//     if (supplier.products && supplier.products.length > 0) {
+//       throw new BadRequestException(
+//         `Impossible de supprimer le fournisseur car il a ${supplier.products.length} produit(s) associé(s)`,
+//       );
+//     }
+
+//     await this.suppliersRepository.remove(supplier);
+//   }
+
+//   async toggleStatus(id: string): Promise<Supplier> {
+//     const supplier = await this.findOne(id);
+//     supplier.isActive = !supplier.isActive;
+//     return await this.suppliersRepository.save(supplier);
+//   }
+
+//   async findByCode(code: string): Promise<Supplier> {
+//     const supplier = await this.suppliersRepository.findOne({
+//       where: { code },
+//     });
+
+//     if (!supplier) {
+//       throw new NotFoundException(
+//         `Fournisseur avec le code "${code}" non trouvé`,
+//       );
+//     }
+
+//     return supplier;
+//   }
+
+//   async getTopSuppliers(limit: number = 10): Promise<Supplier[]> {
+//     return await this.suppliersRepository.find({
+//       where: { isActive: true },
+//       order: { rating: 'DESC' },
+//       take: limit,
+//     });
+//   }
+// }
 import {
   Injectable,
   NotFoundException,
@@ -14,7 +254,11 @@ import {
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
 
-type SupplierWithCount = Supplier & { productsCount: number };
+// Interface pour le type retourné
+interface SupplierWithCount extends Supplier {
+  productsCount: number;
+}
+
 @Injectable()
 export class SuppliersService {
   constructor(
@@ -49,73 +293,42 @@ export class SuppliersService {
     return await this.suppliersRepository.save(supplier);
   }
 
-  //   async findAll(
-  //     page: number = 1,
-  //     pageSize: number = 20,
-  //     search?: string,
-  //     isActive?: boolean,
-  //   ): Promise<PaginatedResponse<Supplier>> {
-  //     const where: FindOptionsWhere<Supplier> = {};
-
-  //     if (search) {
-  //       where.name = Like(`%${search}%`);
-  //     }
-
-  //     if (isActive !== undefined) {
-  //       where.isActive = isActive;
-  //     }
-
-  //     const [data, total] = await this.suppliersRepository.findAndCount({
-  //       where,
-  //       skip: (page - 1) * pageSize,
-  //       take: pageSize,
-  //       order: { name: 'ASC' },
-  //       relations: ['products'],
-  //     });
-
-  //     // Ajouter le compteur de produits
-  //     const dataWithCounts = data.map((supplier) => ({
-  //       ...supplier,
-  //       productsCount: supplier.products?.length || 0,
-  //       products: undefined, // Ne pas envoyer la liste complète des produits
-  //     }));
-
-  //     return PaginatedResponseBuilder.build(
-  //       dataWithCounts,
-  //       total,
-  //       page,
-  //       pageSize,
-  //     );
-  //   }
   async findAll(
     page: number = 1,
     pageSize: number = 20,
     search?: string,
     isActive?: boolean,
-  ): Promise<PaginatedResponse<SupplierWithCount>> {
-    // ← Type plus précis
-    const where: FindOptionsWhere<Supplier> = {};
+  ): Promise<PaginatedResponse<Supplier>> {
+    // Construction de la requête
+    const queryBuilder =
+      this.suppliersRepository.createQueryBuilder('supplier');
 
+    // Filtres
     if (search) {
-      where.name = Like(`%${search}%`);
+      queryBuilder.where(
+        '(supplier.name ILIKE :search OR supplier.code ILIKE :search OR supplier.email ILIKE :search)',
+        { search: `%${search}%` },
+      );
     }
 
     if (isActive !== undefined) {
-      where.isActive = isActive;
+      queryBuilder.andWhere('supplier.isActive = :isActive', { isActive });
     }
 
-    const [data, total] = await this.suppliersRepository.findAndCount({
-      where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      order: { name: 'ASC' },
-      // Ne pas charger les produits pour éviter les données inutiles
-    });
+    // Compter le total AVANT pagination
+    const total = await queryBuilder.getCount();
 
-    // Compter les produits pour chaque fournisseur
-    const dataWithCounts: SupplierWithCount[] = await Promise.all(
+    // Appliquer la pagination et récupérer les données
+    const data = await queryBuilder
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .orderBy('supplier.name', 'ASC')
+      .getMany();
+
+    // Compter les produits pour chaque fournisseur (optionnel, si nécessaire)
+    const dataWithCounts = await Promise.all(
       data.map(async (supplier) => {
-        const result = await this.suppliersRepository
+        const count = await this.suppliersRepository
           .createQueryBuilder('supplier')
           .leftJoin('supplier.products', 'products')
           .where('supplier.id = :id', { id: supplier.id })
@@ -124,11 +337,12 @@ export class SuppliersService {
 
         return {
           ...supplier,
-          productsCount: parseInt(result?.count) || 0,
+          productsCount: parseInt(count?.count) || 0,
         };
       }),
     );
 
+    // Retourner la réponse paginée complète
     return PaginatedResponseBuilder.build(
       dataWithCounts,
       total,
@@ -137,22 +351,10 @@ export class SuppliersService {
     );
   }
 
-  //   async findOne(id: string): Promise<Supplier> {
-  //     const supplier = await this.suppliersRepository.findOne({
-  //       where: { id },
-  //       relations: ['products'],
-  //     });
-
-  //     if (!supplier) {
-  //       throw new NotFoundException(`Fournisseur avec l'ID "${id}" non trouvé`);
-  //     }
-
-  //     return supplier;
-  //   }
   async findOne(id: string): Promise<Supplier> {
     const supplier = await this.suppliersRepository.findOne({
       where: { id },
-      relations: ['products'], // ← Ici on charge les produits
+      relations: ['products'],
     });
 
     if (!supplier) {
@@ -161,6 +363,7 @@ export class SuppliersService {
 
     return supplier;
   }
+
   async update(
     id: string,
     updateSupplierDto: UpdateSupplierDto,

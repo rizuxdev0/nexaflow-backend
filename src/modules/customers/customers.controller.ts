@@ -93,7 +93,7 @@ export class CustomersController {
     return this.customersService.getCustomerOrders(id);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Modifier un client' })
   @ApiParam({ name: 'id', description: 'ID du client' })
   @ApiResponse({ status: 200, description: 'Client modifié' })

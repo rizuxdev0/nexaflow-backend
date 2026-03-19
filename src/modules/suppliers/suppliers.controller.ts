@@ -84,7 +84,7 @@ export class SuppliersController {
     return this.suppliersService.findByCode(code);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @ApiOperation({ summary: 'Modifier un fournisseur' })
   @ApiParam({ name: 'id', description: 'ID du fournisseur' })
   @ApiResponse({ status: 200, description: 'Fournisseur modifié' })

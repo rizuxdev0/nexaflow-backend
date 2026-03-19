@@ -22,7 +22,7 @@ export class Customer {
   @Column({ unique: true })
   email: string;
 
-  @Column({ nullable: true, length: 20 })
+  @Column({ nullable: true, length: 30 })
   phone: string;
 
   @Column({ nullable: true, type: 'text' })

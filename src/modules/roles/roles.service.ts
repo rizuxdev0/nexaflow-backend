@@ -53,6 +53,36 @@ export class RolesService {
     return role;
   }
 
+  // async create(createRoleDto: CreateRoleDto): Promise<Role> {
+  //   // Vérifier si le nom existe déjà
+  //   const existingRole = await this.rolesRepository.findOne({
+  //     where: { name: createRoleDto.name },
+  //   });
+
+  //   if (existingRole) {
+  //     throw new ConflictException(
+  //       `Un rôle avec le nom ${createRoleDto.name} existe déjà`,
+  //     );
+  //   }
+
+  //   // Récupérer les permissions si fournies
+  //   let permissions: Permission[] = [];
+  //   if (createRoleDto.permissionIds?.length) {
+  //     permissions = await this.permissionsRepository.findBy({
+  //       id: In(createRoleDto.permissionIds),
+  //     });
+  //   }
+
+  //   const role = this.rolesRepository.create({
+  //     name: createRoleDto.name,
+  //     label: createRoleDto.label,
+  //     description: createRoleDto.description,
+  //     permissions,
+  //     isSystem: false,
+  //   });
+
+  //   return await this.rolesRepository.save(role);
+  // }
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
     // Vérifier si le nom existe déjà
     const existingRole = await this.rolesRepository.findOne({
@@ -68,6 +98,7 @@ export class RolesService {
     // Récupérer les permissions si fournies
     let permissions: Permission[] = [];
     if (createRoleDto.permissionIds?.length) {
+      // ✅ CORRIGÉ: permissionIds au lieu de permissions
       permissions = await this.permissionsRepository.findBy({
         id: In(createRoleDto.permissionIds),
       });

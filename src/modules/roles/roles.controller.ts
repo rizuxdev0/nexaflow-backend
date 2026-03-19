@@ -8,6 +8,7 @@ import {
   HttpStatus,
   HttpCode,
   Put,
+  Patch,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -68,7 +69,7 @@ export class RolesController {
     return this.rolesService.findByName(name);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @Permissions('roles.update')
   @ApiOperation({ summary: 'Modifier un rôle' })
   @ApiParam({ name: 'id', description: 'ID du rôle' })
