@@ -223,13 +223,10 @@ export class ProductsController {
     return this.productsService.updateStock(id, updateStockDto);
   }
 
-  @Post(':id/duplicate')
-  @ApiOperation({ summary: 'Dupliquer un produit' })
-  @ApiParam({ name: 'id', description: 'ID du produit à dupliquer' })
-  @ApiResponse({ status: 201, description: 'Produit dupliqué' })
-  @ApiResponse({ status: 404, description: 'Produit non trouvé' })
-  @HttpCode(HttpStatus.CREATED)
-  duplicate(@Param('id') id: string): Promise<Product> {
+
+  @Post('duplicate/:id')
+  @Permissions('products.create')
+  duplicate(@Param('id') id: string) {
     return this.productsService.duplicateProduct(id);
   }
 

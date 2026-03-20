@@ -88,6 +88,10 @@ export class Category {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ type: 'jsonb', nullable: true })
+  translations: { [lang: string]: { name?: string; description?: string } };
+
+
   @OneToMany(() => Product, (product) => product.category)
   products: Product[];
 

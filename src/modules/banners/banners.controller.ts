@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Put, Param, Delete, Patch, Query, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BannersService } from './banners.service';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
@@ -9,6 +10,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
+@ApiTags('banners')
+@ApiBearerAuth()
 @Controller('banners')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class BannersController {

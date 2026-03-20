@@ -1,47 +1,54 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { PackagesService } from './packages.service';
-import { CreatePackageDto } from './dto/create-package.dto';
-import { UpdatePackageDto } from './dto/update-package.dto';
+import { CreatePackageDto, UpdatePackageDto } from './dto/package.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+@ApiTags('packages')
+@ApiBearerAuth()
 @Controller('packages')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class PackagesController {
   constructor(private readonly packagesService: PackagesService) {}
 
-  @Public()
   @Get()
-  getBundles(
-    @Query('page') page: string, 
-    @Query('pageSize') pageSize: string,
-    @Query('includeInactive') includeInactive: string
-  ) {
-    return this.packagesService.getBundles(+page || 1, +pageSize || 20, includeInactive === 'true');
+  @Permissions('promos.read')
+  findAll(@Query() query: any) {
+    return this.packagesService.findAll(query);
+  }
+
+  @Get(':id')
+  @Permissions('promos.read')
+  findOne(@Param('id') id: string) {
+    return this.packagesService.findOne(id);
+  }
+
+  @Get('slug/:slug')
+  @Public() // Allow public view of package details
+  findBySlug(@Param('slug') slug: string) {
+    return this.packagesService.findBySlug(slug);
   }
 
   @Post()
-  @Roles('admin', 'manager')
-  @Permissions('packages.create')
-  createBundle(@Body() createPackageDto: CreatePackageDto) {
-    return this.packagesService.createBundle(createPackageDto);
+  @Permissions('promos.update')
+  create(@Body() dto: CreatePackageDto) {
+    return this.packagesService.create(dto);
   }
 
   @Put(':id')
-  @Roles('admin', 'manager')
-  @Permissions('packages.update')
-  updateBundle(@Param('id') id: string, @Body() updatePackageDto: UpdatePackageDto) {
-    return this.packagesService.updateBundle(id, updatePackageDto);
+  @Permissions('promos.update')
+  update(@Param('id') id: string, @Body() dto: Partial<CreatePackageDto>) {
+    return this.packagesService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('admin', 'manager')
-  @Permissions('packages.delete')
-  deleteBundle(@Param('id') id: string) {
-    return this.packagesService.deleteBundle(id);
+  @Permissions('promos.delete')
+  remove(@Param('id') id: string) {
+    return this.packagesService.remove(id);
   }
 }

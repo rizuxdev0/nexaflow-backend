@@ -413,50 +413,20 @@ export class ProductsService {
   }
 
   async duplicateProduct(id: string): Promise<Product> {
-    const product = await this.productsRepository.findOne({
-      where: { id },
-    });
-
-    if (!product) {
-      throw new NotFoundException(`Produit avec l'ID "${id}" non trouvé`);
-    }
+    const product = await this.findOne(id);
 
     const duplicatedProduct = this.productsRepository.create({
-      name: `${product.name} (Copie)`,
-      description: product.description,
-      price: product.price,
-      costPrice: product.costPrice,
+      ...product,
+      id: undefined,
+      name: `${product.name} (Copy)`,
       sku: `${product.sku}-COPY-${Date.now()}`,
-      barcode: product.barcode,
-      brand: product.brand,
-      categoryId: product.categoryId,
-      supplierId: product.supplierId,
       slug: `${product.slug}-copy-${Date.now()}`,
-      stock: 0, // sécuritéj
-      minStock: product.minStock,
-      isActive: false, // ne pas publier automatiquement
-      isFeatured: false,
-      images: product.images ?? [],
-      tags: product.tags ?? [],
+      stock: 0,
+      isActive: false,
+      createdAt: undefined,
+      updatedAt: undefined
     });
 
     return await this.productsRepository.save(duplicatedProduct);
   }
-
-  //   async duplicateProduct(id: string): Promise<Product> {
-  //     const product = await this.findOne(id);
-
-  //     const { id: _, createdAt, updatedAt, ...productData } = product;
-
-  //     const duplicatedProduct = this.productsRepository.create({
-  //       ...productData,
-  //       name: `${product.name} (Copie)`,
-  //       sku: `${product.sku}-COPY-${Date.now()}`,
-  //       slug: `${product.slug}-copy-${Date.now()}`,
-  //       stock: 0,
-  //       isActive: false,
-  //     });
-
-  //     return await this.productsRepository.save(duplicatedProduct);
-  //   }
 }

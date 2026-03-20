@@ -1,45 +1,58 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
-@Entity('packages')
-export class Package {
+export interface BundleItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+@Entity('product_bundles')
+export class ProductBundle {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column()
   name: string;
 
-  @Column({ type: 'text' })
+  @Column({ nullable: true, type: 'text' })
   description: string;
 
   @Column({ unique: true })
   slug: string;
 
-  @Column({ type: 'jsonb', default: [] })
-  items: any[];
+  @Column({ type: 'jsonb' })
+  items: BundleItem[];
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'decimal', precision: 10, scale: 0 })
   originalPrice: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'decimal', precision: 10, scale: 0 })
   bundlePrice: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   savingsPercent: number;
 
-  @Column({ default: 0 })
+  @Column({ type: 'int', default: 0 })
   stock: number;
 
-  @Column({ type: 'timestamp' })
+  @Column({ nullable: true })
+  image: string;
+
+  @Column()
   startDate: Date;
 
-  @Column({ type: 'timestamp' })
+  @Column()
   endDate: Date;
 
   @Column({ default: true })
   isActive: boolean;
-
-  @Column({ nullable: true })
-  image: string;
 
   @CreateDateColumn()
   createdAt: Date;

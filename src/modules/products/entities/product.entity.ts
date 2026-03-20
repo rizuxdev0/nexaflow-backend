@@ -101,6 +101,13 @@ export class Product {
   @Column({ type: 'simple-array', nullable: true })
   tags: string[];
 
+  @Column({ type: 'jsonb', nullable: true })
+  wholesaleTiers: { minQuantity: number; price: number; discount: number }[];
+
+  @Column({ type: 'jsonb', nullable: true })
+  translations: { [lang: string]: { name?: string; description?: string; shortDescription?: string } };
+
+
   @OneToMany(() => ProductVariant, (variant) => variant.product)
   variants: ProductVariant[];
 

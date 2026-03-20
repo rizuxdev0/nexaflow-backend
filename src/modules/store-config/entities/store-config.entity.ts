@@ -14,11 +14,15 @@ export class StoreConfig {
   @Column({ type: 'jsonb', default: {} })
   content: any;
 
-  @Column({ type: 'jsonb', default: [] })
-  partners: any[];
+  @Column({ type: 'jsonb', default: {} })
+  seo: any;
+
+  @Column({ type: 'jsonb', default: {} })
+  social: any;
 
   @Column({ type: 'jsonb', default: [] })
   features: any[];
+
 
   @UpdateDateColumn()
   updatedAt: Date;

@@ -40,6 +40,22 @@ import { PackagesModule } from './modules/packages/packages.module';
 import { ReturnsModule } from './modules/returns/returns.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { DeferredPaymentsModule } from './modules/deferred-payments/deferred-payments.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { BranchesModule } from './modules/branches/branches.module';
+import { WarehousesModule } from './modules/warehouses/warehouses.module';
+import { BatchesModule } from './modules/batches/batches.module';
+import { StockModule } from './modules/stock/stock.module';
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { InventoriesModule } from './modules/inventories/inventories.module';
+import { SavedCartsModule } from './modules/saved-carts/saved-carts.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+
+
+
+
 // Common
 
 @Module({
@@ -84,7 +100,11 @@ import { DeferredPaymentsModule } from './modules/deferred-payments/deferred-pay
     // Phase 5 - Audit et rapports
     AuditModule,
 
+    ExpensesModule,
+    CurrenciesModule,
+    WebhooksModule,
     StoreConfigModule,
+
     BannersModule,
     LoyaltyModule,
     PromosModule,
@@ -92,6 +112,20 @@ import { DeferredPaymentsModule } from './modules/deferred-payments/deferred-pay
     ReturnsModule,
     ReviewsModule,
     DeferredPaymentsModule,
+    BranchesModule,
+    WarehousesModule,
+    BatchesModule,
+    StockModule,
+    PurchaseOrdersModule,
+    InventoriesModule,
+    SavedCartsModule,
+    ReportsModule,
+    NotificationsModule,
+    CashRegistersModule,
+
+
+
+
   ],
   controllers: [AppController, UsersController, RolesController],
   providers: [

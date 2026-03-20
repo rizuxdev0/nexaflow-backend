@@ -10,6 +10,10 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+@ApiTags('loyalty')
+@ApiBearerAuth()
 @Controller('loyalty')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class LoyaltyController {

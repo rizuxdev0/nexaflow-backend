@@ -20,8 +20,10 @@ export class StoreConfigService {
         identity: {},
         checkout: {},
         content: {},
-        partners: [],
+        seo: {},
+        social: {},
         features: []
+
       });
       await this.configRepository.save(config);
     }

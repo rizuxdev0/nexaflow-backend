@@ -1,50 +1,54 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
 import { PromosService } from './promos.service';
-import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
-import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
+import { CreatePromoDto, ValidatePromoDto } from './dto/promo.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+@ApiTags('promos')
+@ApiBearerAuth()
 @Controller('promos')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class PromosController {
   constructor(private readonly promosService: PromosService) {}
 
   @Get()
-  @Roles('admin', 'manager')
   @Permissions('promos.read')
-  getPromoCodes(@Query('page') page: string, @Query('pageSize') pageSize: string) {
-    return this.promosService.getPromoCodes(+page || 1, +pageSize || 20);
+  findAll(@Query() query: any) {
+    return this.promosService.findAll(query);
+  }
+
+  @Get(':id')
+  @Permissions('promos.read')
+  findOne(@Param('id') id: string) {
+    return this.promosService.findOne(id);
+  }
+
+  @Post('validate')
+  @Public() // Allow checkout from public users
+  validate(@Body() dto: ValidatePromoDto) {
+    return this.promosService.validateCode(dto);
   }
 
   @Post()
-  @Roles('admin', 'manager')
-  @Permissions('promos.create')
-  createPromo(@Body() createPromoCodeDto: CreatePromoCodeDto) {
-    return this.promosService.createPromo(createPromoCodeDto);
+  @Permissions('promos.update')
+  create(@Body() dto: CreatePromoDto) {
+    return this.promosService.create(dto);
   }
 
   @Put(':id')
-  @Roles('admin', 'manager')
   @Permissions('promos.update')
-  updatePromo(@Param('id') id: string, @Body() updatePromoCodeDto: UpdatePromoCodeDto) {
-    return this.promosService.updatePromo(id, updatePromoCodeDto);
+  update(@Param('id') id: string, @Body() dto: Partial<CreatePromoDto>) {
+    return this.promosService.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('admin', 'manager')
   @Permissions('promos.delete')
-  deletePromo(@Param('id') id: string) {
-    return this.promosService.deletePromo(id);
-  }
-
-  @Public() // Accessible safely to validate cart
-  @Post('validate')
-  validatePromo(@Body('code') code: string, @Body('orderTotal') orderTotal: number) {
-    return this.promosService.validatePromo(code, orderTotal);
+  remove(@Param('id') id: string) {
+    return this.promosService.remove(id);
   }
 }

@@ -1,82 +1,136 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Return } from './entities/return.entity';
+import { ProductReturn, ReturnStatus, ReturnReason } from './entities/return.entity';
 import { CreateReturnDto, UpdateReturnStatusDto } from './dto/return.dto';
+import { Order } from '../orders/entities/order.entity';
+import { StockService } from '../stock/stock.service';
+import { StockMovementType } from '../stock/entities/stock-movement.entity';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
+
 
 @Injectable()
 export class ReturnsService {
   constructor(
-    @InjectRepository(Return)
-    private readonly returnRepository: Repository<Return>,
+    @InjectRepository(ProductReturn)
+    private readonly returnRepository: Repository<ProductReturn>,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
+    private readonly stockService: StockService,
+    private readonly auditService: AuditService,
   ) {}
 
-  async getAll(page: number = 1, pageSize: number = 20, status?: string) {
-    const where = status ? { status } : {};
-    const [data, total] = await this.returnRepository.findAndCount({
-      where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      order: { createdAt: 'DESC' },
-    });
+  async findAll(query: { page?: number; pageSize?: number; status?: string; search?: string }) {
+    const { page = 1, pageSize = 20, status, search } = query;
+    const qb = this.returnRepository.createQueryBuilder('ret')
+      .leftJoinAndSelect('ret.order', 'order')
+      .orderBy('ret.createdAt', 'DESC');
+
+    if (status) qb.andWhere('ret.status = :status', { status });
+    if (search) {
+      qb.andWhere('(ret.returnNumber LIKE :search OR ret.customerName LIKE :search OR ret.orderId LIKE :search)', { search: `%${search}%` });
+    }
+
+    const [data, total] = await qb
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+
     return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
-  async getByCustomer(customerId: string) {
-    return this.returnRepository.find({
-      where: { customerId },
-      order: { createdAt: 'DESC' },
+  async findOne(id: string) {
+    const ret = await this.returnRepository.findOne({ 
+      where: { id },
+      relations: ['order']
     });
+    if (!ret) throw new NotFoundException('Retour non trouvé');
+    return ret;
   }
 
-  async create(createReturnDto: CreateReturnDto): Promise<Return> {
-    // Generate return Number
-    const year = new Date().getFullYear();
-    const count = await this.returnRepository.count({
-      where: { returnNumber: require('typeorm').Like(`RET-${year}%`) }
-    });
-    const returnNumber = `RET-${year}${String(count + 1).padStart(4, '0')}`;
+  async create(dto: CreateReturnDto) {
+    const order = await this.orderRepository.findOne({ where: { id: dto.orderId } });
+    if (!order) throw new NotFoundException('Commande non trouvée');
 
+    const returnNumber = await this.generateReturnNumber();
     const ret = this.returnRepository.create({
-      ...createReturnDto,
+      ...dto,
       returnNumber,
-      status: 'pending',
+      status: ReturnStatus.PENDING,
+      customerName: dto.customerName || order.customerName,
+      customerId: dto.customerId || order.customerId
     });
-    
-    return this.returnRepository.save(ret);
+
+    const saved = await this.returnRepository.save(ret);
+
+    await this.auditService.log({
+      userName: 'Client/Admin', // Should pass from context
+      action: AuditAction.CREATE,
+      resource: 'ProductReturn',
+
+      resourceId: saved.id,
+      details: `Demande de retour ${saved.returnNumber} créée pour la commande ${order.orderNumber}`
+    });
+
+    return saved;
   }
 
-  async updateStatus(id: string, updateDto: UpdateReturnStatusDto): Promise<Return> {
-    const ret = await this.returnRepository.findOne({ where: { id } });
-    if (!ret) throw new NotFoundException('Return request not found');
-
-    const previousStatus = ret.status;
-    const { status, processedBy } = updateDto;
-
-    const validTransitions: Record<string, string[]> = {
-      pending: ['approved', 'rejected'],
-      approved: ['refunded', 'exchanged'],
-      rejected: [],      // terminal
-      refunded: [],       // terminal
-      exchanged: [],      // terminal
-    };
-
-    if (!validTransitions[previousStatus]?.includes(status)) {
-      throw new BadRequestException(`Transition invalide : ${previousStatus} -> ${status}`);
+  async updateStatus(id: string, dto: UpdateReturnStatusDto, userId?: string) {
+    const ret = await this.findOne(id);
+    const oldStatus = ret.status;
+    
+    // Status transition validation
+    if (oldStatus === ReturnStatus.REFUNDED || oldStatus === ReturnStatus.EXCHANGED) {
+      throw new BadRequestException('Impossible de modifier un retour déjà traité');
     }
 
-    if ((status === 'approved' || status === 'refunded') && previousStatus === 'pending') {
-      // TODO: Reintegre stock items
-      // For each item in ret.items
-      // if item.restockable === true -> Increment Stock
+    if (dto.status === ReturnStatus.APPROVED && oldStatus === ReturnStatus.PENDING) {
+      // Restocking logic if applicable
+      for (const item of ret.items) {
+        if (item.restockable) {
+          await this.stockService.createMovement({
+            productId: item.productId,
+            type: StockMovementType.RETURN,
+            quantity: item.quantity,
+            reason: `Réintégration stock via retour ${ret.returnNumber}`,
+            reference: ret.returnNumber,
+            userId: userId
+          });
+        }
+      }
     }
 
-    ret.status = status;
-    if (processedBy) ret.processedBy = processedBy;
-    if (['approved', 'rejected', 'refunded', 'exchanged'].includes(status)) {
-      ret.processedAt = new Date();
+    ret.status = dto.status;
+    if (dto.notes) {
+      ret.notes = ret.notes ? `${ret.notes}\n[Update ${new Date().toISOString()}] ${dto.notes}` : `[Update ${new Date().toISOString()}] ${dto.notes}`;
     }
+    if (dto.refundAmount) ret.refundAmount = dto.refundAmount;
+    if (dto.refundMethod) ret.refundMethod = dto.refundMethod;
+    
+    ret.processedAt = new Date();
+    ret.processedBy = userId || null;
 
-    return this.returnRepository.save(ret);
+    const saved = await this.returnRepository.save(ret);
+
+    await this.auditService.log({
+      userId,
+      userName: 'Admin',
+      action: AuditAction.UPDATE,
+      resource: 'ProductReturn',
+
+      resourceId: saved.id,
+      details: `Statut retour ${saved.returnNumber} mis à jour : ${oldStatus} → ${saved.status}`
+    });
+
+    return saved;
+  }
+
+  private async generateReturnNumber(): Promise<string> {
+    const date = new Date();
+    const year = date.getFullYear().toString().slice(-2);
+    const count = await this.returnRepository.count();
+    const seq = (count + 1).toString().padStart(4, '0');
+    return `RET-${year}${seq}`;
   }
 }

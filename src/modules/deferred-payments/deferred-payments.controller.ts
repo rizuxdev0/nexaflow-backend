@@ -7,6 +7,10 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+@ApiTags('deferred-payments')
+@ApiBearerAuth()
 @Controller('deferred-payments')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class DeferredPaymentsController {

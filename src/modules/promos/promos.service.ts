@@ -1,91 +1,96 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { PromoCode } from './entities/promo-code.entity';
-import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
-import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
+import { Repository, MoreThan, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { PromoCode, PromoType } from './entities/promo.entity';
+import { CreatePromoDto, ValidatePromoDto } from './dto/promo.dto';
 
 @Injectable()
 export class PromosService {
   constructor(
     @InjectRepository(PromoCode)
-    private readonly promosRepository: Repository<PromoCode>,
+    private readonly promoRepository: Repository<PromoCode>,
   ) {}
 
-  async getPromoCodes(page: number = 1, pageSize: number = 20) {
-    const [data, total] = await this.promosRepository.findAndCount({
+  async findAll(query: { active?: boolean; page?: number; pageSize?: number }) {
+    const { active, page = 1, pageSize = 20 } = query;
+    const where: any = {};
+    if (active !== undefined) where.isActive = active;
+
+    const [data, total] = await this.promoRepository.findAndCount({
+      where,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC' }
     });
+
     return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
-  async createPromo(createPromoCodeDto: CreatePromoCodeDto): Promise<PromoCode> {
-    const promo = this.promosRepository.create({
-      ...createPromoCodeDto,
-      code: createPromoCodeDto.code.toUpperCase()
-    });
-    return this.promosRepository.save(promo);
+  async findOne(id: string) {
+    const promo = await this.promoRepository.findOne({ where: { id } });
+    if (!promo) throw new NotFoundException('Code promo non trouvé');
+    return promo;
   }
 
-  async updatePromo(id: string, updatePromoCodeDto: UpdatePromoCodeDto): Promise<PromoCode> {
-    const promo = await this.promosRepository.findOne({ where: { id } });
-    if (!promo) throw new NotFoundException('Promo code not found');
-    
-    if (updatePromoCodeDto.code) {
-      updatePromoCodeDto.code = updatePromoCodeDto.code.toUpperCase();
-    }
-    
-    Object.assign(promo, updatePromoCodeDto);
-    return this.promosRepository.save(promo);
+  async findByCode(code: string) {
+    return this.promoRepository.findOne({ where: { code, isActive: true } });
   }
 
-  async deletePromo(id: string): Promise<void> {
-    const promo = await this.promosRepository.findOne({ where: { id } });
-    if (!promo) throw new NotFoundException('Promo code not found');
-    await this.promosRepository.remove(promo);
-  }
+  async validateCode(dto: ValidatePromoDto) {
+    const promo = await this.findByCode(dto.code);
+    if (!promo) throw new BadRequestException('Code invalide ou expiré');
 
-  async validatePromo(code: string, orderTotal: number) {
-    const promo = await this.promosRepository.findOne({ where: { code: code.toUpperCase() } });
-    
-    if (!promo) return { valid: false, discount: 0, message: 'Code promo invalide' };
-    if (!promo.isActive) return { valid: false, discount: 0, message: 'Code promo désactivé' };
-    
     const now = new Date();
-    if (now < new Date(promo.startDate)) return { valid: false, discount: 0, message: 'Code promo pas encore actif' };
-    if (now > new Date(promo.endDate)) return { valid: false, discount: 0, message: 'Code promo expiré' };
-    
+    if (now < promo.startDate || now > promo.endDate) {
+      throw new BadRequestException('Ce code n\'est pas actif actuellement');
+    }
+
     if (promo.usageLimit > 0 && promo.usedCount >= promo.usageLimit) {
-      return { valid: false, discount: 0, message: "Limite d'utilisation atteinte" };
+      throw new BadRequestException('La limite d\'utilisation de ce code a été atteinte');
     }
-    
-    if (orderTotal < promo.minOrderAmount) {
-      return { valid: false, discount: 0, message: `Minimum: ${promo.minOrderAmount} FCFA` };
+
+    if (dto.orderAmount < promo.minOrderAmount) {
+      throw new BadRequestException(`Ce code nécessite un montant minimum de ${promo.minOrderAmount}`);
     }
+
+    // Logic for applicableProducts and applicableCategories should be handled in checkout?
+    // Usually, we return the promo details and the frontend/checkout-service applies it.
     
-    let discount = promo.type === 'percentage' 
-      ? Math.round(orderTotal * promo.value / 100) 
-      : promo.value;
-      
-    if (promo.maxDiscountAmount && discount > promo.maxDiscountAmount) {
-      discount = promo.maxDiscountAmount;
+    let discountAmount = 0;
+    if (promo.type === PromoType.PERCENTAGE) {
+      discountAmount = (dto.orderAmount * Number(promo.value)) / 100;
+      if (promo.maxDiscountAmount > 0) {
+        discountAmount = Math.min(discountAmount, Number(promo.maxDiscountAmount));
+      }
+    } else {
+      discountAmount = Number(promo.value);
     }
-    
-    return { 
-      valid: true, 
-      discount, 
-      message: `${promo.type === 'percentage' ? `-${promo.value}%` : `-${promo.value} FCFA`} appliqué !`, 
-      promo 
-    };
+
+    return { isValid: true, discountAmount, promo };
   }
 
   async incrementUsage(id: string) {
-    const promo = await this.promosRepository.findOne({ where: { id } });
-    if (promo) {
-      promo.usedCount += 1;
-      await this.promosRepository.save(promo);
-    }
+    const promo = await this.findOne(id);
+    promo.usedCount += 1;
+    return this.promoRepository.save(promo);
+  }
+
+  async create(dto: CreatePromoDto) {
+    const existing = await this.promoRepository.findOne({ where: { code: dto.code } });
+    if (existing) throw new BadRequestException('Ce code existe déjà');
+
+    const promo = this.promoRepository.create(dto);
+    return this.promoRepository.save(promo);
+  }
+
+  async update(id: string, dto: Partial<CreatePromoDto>) {
+    const promo = await this.findOne(id);
+    Object.assign(promo, dto);
+    return this.promoRepository.save(promo);
+  }
+
+  async remove(id: string) {
+    const promo = await this.findOne(id);
+    return this.promoRepository.remove(promo);
   }
 }

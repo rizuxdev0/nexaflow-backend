@@ -1,52 +1,59 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Package } from './entities/package.entity';
-import { CreatePackageDto } from './dto/create-package.dto';
-import { UpdatePackageDto } from './dto/update-package.dto';
+import { Repository, MoreThan, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { ProductBundle } from './entities/package.entity';
+import { CreatePackageDto } from './dto/package.dto';
 
 @Injectable()
 export class PackagesService {
   constructor(
-    @InjectRepository(Package)
-    private readonly packageRepository: Repository<Package>,
+    @InjectRepository(ProductBundle)
+    private readonly bundleRepository: Repository<ProductBundle>,
   ) {}
 
-  async getBundles(page: number = 1, pageSize: number = 20, includeInactive: boolean = false) {
-    const where = includeInactive ? {} : { isActive: true };
-    const [data, total] = await this.packageRepository.findAndCount({
+  async findAll(query: { active?: boolean; page?: number; pageSize?: number }) {
+    const { active, page = 1, pageSize = 20 } = query;
+    const where: any = {};
+    if (active !== undefined) where.isActive = active;
+
+    const [data, total] = await this.bundleRepository.findAndCount({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC' }
     });
+
     return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
-  async createBundle(createPackageDto: CreatePackageDto): Promise<Package> {
-    const slug = createPackageDto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const pkg = this.packageRepository.create({
-      ...createPackageDto,
-      slug
-    });
-    return this.packageRepository.save(pkg);
+  async findOne(id: string) {
+    const bundle = await this.bundleRepository.findOne({ where: { id } });
+    if (!bundle) throw new NotFoundException('Pack non trouvé');
+    return bundle;
   }
 
-  async updateBundle(id: string, updatePackageDto: UpdatePackageDto): Promise<Package> {
-    const pkg = await this.packageRepository.findOne({ where: { id } });
-    if (!pkg) throw new NotFoundException('Pack non trouvé');
-    
-    Object.assign(pkg, updatePackageDto);
-    if (updatePackageDto.name) {
-      pkg.slug = updatePackageDto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    }
-    
-    return this.packageRepository.save(pkg);
+  async findBySlug(slug: string) {
+    const bundle = await this.bundleRepository.findOne({ where: { slug, isActive: true } });
+    if (!bundle) throw new NotFoundException('Pack non trouvé');
+    return bundle;
   }
 
-  async deleteBundle(id: string): Promise<void> {
-    const pkg = await this.packageRepository.findOne({ where: { id } });
-    if (!pkg) throw new NotFoundException('Pack non trouvé');
-    await this.packageRepository.remove(pkg);
+  async create(dto: CreatePackageDto) {
+    const existing = await this.bundleRepository.findOne({ where: { slug: dto.slug } });
+    if (existing) throw new BadRequestException('Ce slug est déjà utilisé');
+
+    const bundle = this.bundleRepository.create(dto);
+    return this.bundleRepository.save(bundle);
+  }
+
+  async update(id: string, dto: Partial<CreatePackageDto>) {
+    const bundle = await this.findOne(id);
+    Object.assign(bundle, dto);
+    return this.bundleRepository.save(bundle);
+  }
+
+  async remove(id: string) {
+    const bundle = await this.findOne(id);
+    return this.bundleRepository.remove(bundle);
   }
 }
