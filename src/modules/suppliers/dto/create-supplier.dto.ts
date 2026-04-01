@@ -3,7 +3,6 @@ import {
   IsString,
   IsNotEmpty,
   IsEmail,
-  IsPhoneNumber,
   IsOptional,
   IsUrl,
   IsNumber,
@@ -25,20 +24,20 @@ export class CreateSupplierDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   name: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Code unique du fournisseur',
     example: 'FOUR001',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(50)
-  code: string;
+  code?: string;
 
   @ApiProperty({ description: 'Nom du contact', example: 'Jean Dupont' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(100)
-  contactName: string;
+  contactName?: string;
 
   @ApiPropertyOptional({
     description: 'Statut actif/inactif',
@@ -54,31 +53,31 @@ export class CreateSupplierDto {
     example: 'contact@techdistrib.com',
   })
   @IsEmail()
-  @IsNotEmpty()
-  email: string;
+  @IsOptional()
+  email?: string;
 
   @ApiProperty({ description: 'Téléphone', example: '+221 77 123 45 67' })
-  @IsPhoneNumber()
-  @IsNotEmpty()
-  phone: string;
+  @IsString()
+  @IsOptional()
+  phone?: string;
 
   @ApiProperty({
     description: 'Adresse complète',
     example: '15 Rue des Entrepreneurs',
   })
   @IsString()
-  @IsNotEmpty()
-  address: string;
+  @IsOptional()
+  address?: string;
 
   @ApiProperty({ description: 'Ville', example: 'Dakar' })
   @IsString()
-  @IsNotEmpty()
-  city: string;
+  @IsOptional()
+  city?: string;
 
   @ApiProperty({ description: 'Pays', example: 'Sénégal' })
   @IsString()
-  @IsNotEmpty()
-  country: string;
+  @IsOptional()
+  country?: string;
 
   @ApiPropertyOptional({
     description: 'Site web',

@@ -58,6 +58,13 @@ export class SuppliersController {
     );
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Statistiques globales des fournisseurs' })
+  @ApiResponse({ status: 200, description: 'Statistiques calculées' })
+  getStats(): Promise<any> {
+    return this.suppliersService.getGlobalStats();
+  }
+
   @Get('top')
   @ApiOperation({ summary: 'Top fournisseurs par note' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -84,13 +91,26 @@ export class SuppliersController {
     return this.suppliersService.findByCode(code);
   }
 
-  @Patch(':id')
-  @ApiOperation({ summary: 'Modifier un fournisseur' })
+  @Put(':id')
+  @ApiOperation({ summary: 'Modifier un fournisseur (complet)' })
   @ApiParam({ name: 'id', description: 'ID du fournisseur' })
   @ApiResponse({ status: 200, description: 'Fournisseur modifié' })
   @ApiResponse({ status: 404, description: 'Fournisseur non trouvé' })
   @ApiResponse({ status: 409, description: 'Code ou email déjà existant' })
-  update(
+  updateFull(
+    @Param('id') id: string,
+    @Body() updateSupplierDto: UpdateSupplierDto,
+  ): Promise<Supplier> {
+    return this.suppliersService.update(id, updateSupplierDto);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Modifier un fournisseur (partiel)' })
+  @ApiParam({ name: 'id', description: 'ID du fournisseur' })
+  @ApiResponse({ status: 200, description: 'Fournisseur modifié' })
+  @ApiResponse({ status: 404, description: 'Fournisseur non trouvé' })
+  @ApiResponse({ status: 409, description: 'Code ou email déjà existant' })
+  updatePartial(
     @Param('id') id: string,
     @Body() updateSupplierDto: UpdateSupplierDto,
   ): Promise<Supplier> {

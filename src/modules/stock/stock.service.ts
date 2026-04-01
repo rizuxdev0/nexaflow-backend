@@ -25,18 +25,19 @@ export class StockService {
     reference?: string;
     warehouseId?: string;
     userId?: string;
+    allowNegative?: boolean;
   }) {
     const product = await this.productRepository.findOne({ where: { id: data.productId } });
     if (!product) throw new NotFoundException('Produit non trouvé');
 
-    const oldStock = product.stock;
+    const oldStock = Number(product.stock);
     let newStock = oldStock;
 
     if (data.type === StockMovementType.IN || data.type === StockMovementType.RETURN || data.type === StockMovementType.PURCHASE) {
       newStock += data.quantity;
     } else {
       newStock -= data.quantity;
-      if (newStock < 0) {
+      if (!data.allowNegative && newStock < 0) {
         throw new BadRequestException(`Stock insuffisant pour ${product.name} : ${oldStock} disponible, ${data.quantity} demandé`);
       }
     }

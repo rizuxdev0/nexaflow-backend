@@ -19,10 +19,10 @@ import {
 import { CashSessionsService } from './cash-sessions.service';
 import { OpenSessionDto } from './dto/open-session.dto';
 import { CloseSessionDto } from './dto/close-session.dto';
-// import { RecordPaymentDto } from './dto/record-payment.dto';
 import { CashSession } from './entities/cash-session.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('cash-sessions')
 @Controller('cash-sessions')
@@ -37,12 +37,11 @@ export class CashSessionsController {
   @HttpCode(HttpStatus.CREATED)
   openSession(
     @Body() openSessionDto: OpenSessionDto,
-    // À remplacer par @CurrentUser() quand l'auth sera implémentée
-    @Query('userId') userId: string,
+    @CurrentUser() user: any,
   ): Promise<CashSession> {
     return this.cashSessionsService.openSession(
       openSessionDto,
-      userId || 'system',
+      user?.id || 'system',
     );
   }
 
@@ -93,7 +92,7 @@ export class CashSessionsController {
   @ApiResponse({ status: 404, description: 'Aucune session active' })
   findActiveByRegister(
     @Param('registerId') registerId: string,
-  ): Promise<CashSession> {
+  ): Promise<CashSession | null> {
     return this.cashSessionsService.findActiveByRegister(registerId);
   }
 

@@ -91,6 +91,9 @@ export class Category {
   @Column({ type: 'jsonb', nullable: true })
   translations: { [lang: string]: { name?: string; description?: string } };
 
+  @Column({ type: 'jsonb', nullable: true })
+  customAttributes: any[];
+
 
   @OneToMany(() => Product, (product) => product.category)
   products: Product[];

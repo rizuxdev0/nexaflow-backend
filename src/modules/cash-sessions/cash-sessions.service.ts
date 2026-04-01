@@ -133,7 +133,7 @@ export class CashSessionsService {
     return session;
   }
 
-  async findActiveByRegister(registerId: string): Promise<CashSession> {
+  async findActiveByRegister(registerId: string): Promise<CashSession | null> {
     const session = await this.sessionsRepository.findOne({
       where: {
         registerId,
@@ -142,13 +142,7 @@ export class CashSessionsService {
       relations: ['register'],
     });
 
-    if (!session) {
-      throw new NotFoundException(
-        `Aucune session active trouvée pour la caisse ${registerId}`,
-      );
-    }
-
-    return session;
+    return session || null;
   }
 
   async findAll(

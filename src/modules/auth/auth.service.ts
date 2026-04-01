@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ConflictException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -19,16 +20,126 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
-import { hash } from 'crypto';
+import { PermissionsService } from '../permissions/permissions.service';
+import { ProductsService } from '../products/products.service';
+import { CategoriesService } from '../categories/categories.service';
+import { SuppliersService } from '../suppliers/suppliers.service';
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
   constructor(
     private usersService: UsersService,
     private rolesService: RolesService,
+    private permissionsService: PermissionsService,
+    private productsService: ProductsService,
+    private categoriesService: CategoriesService,
+    private suppliersService: SuppliersService,
     private jwtService: JwtService,
     private configService: ConfigService,
   ) {}
+
+  async onModuleInit() {
+    try {
+      // 1. Créer les permissions par défaut
+      await this.permissionsService.createDefaultPermissions();
+      const permissions = await this.permissionsService.findAll();
+
+      // 2. Créer les rôles par défaut
+      await this.rolesService.seedDefaultRoles(permissions as any);
+
+      // 3. Créer l'utilisateur super admin par défaut
+      const superAdminEmail = 'superadmin@nexaflow.com';
+      const existingSuperAdmin = await this.usersService
+        .findByEmail(superAdminEmail)
+        .catch(() => null);
+
+      if (!existingSuperAdmin) {
+        const superAdminRole = await this.rolesService.findByName('super_admin');
+        const hashedPassword = await bcrypt.hash(
+          'super123',
+          this.configService.get('BCRYPT_ROUNDS', 12),
+        );
+
+        await this.usersService.create({
+          firstName: 'Ousmane',
+          lastName: 'Ndiaye',
+          email: superAdminEmail,
+          password: hashedPassword,
+          roleId: superAdminRole.id,
+          isActive: true,
+          isEmailVerified: true,
+        });
+
+        console.log('✅ Utilisateur Super Admin créé avec succès');
+      }
+
+      // 4. Créer une catégorie par défaut
+      const defaultCategoryName = 'Électronique';
+      let category = await (this.categoriesService as any).categoriesRepository.findOne({
+        where: { name: defaultCategoryName },
+      });
+
+      if (!category) {
+        category = await this.categoriesService.create({
+          name: defaultCategoryName,
+          description: 'Produits électroniques et gadgets',
+          isActive: true,
+        });
+        console.log('✅ Catégorie par défaut créée avec succès');
+      }
+
+      // 5. Créer un fournisseur par défaut
+      const defaultSupplierCode = 'SUP-TECH-001';
+      let supplier = await (this.suppliersService as any).suppliersRepository.findOne({
+        where: { code: defaultSupplierCode },
+      });
+
+      if (!supplier) {
+        supplier = await this.suppliersService.create({
+          name: 'Tech Distributeur SARL',
+          contactName: 'Oumar Sall',
+          code: defaultSupplierCode,
+          email: 'contact@tech-distrib.com',
+          phone: '+221 33 800 00 00',
+          city: 'Dakar',
+          country: 'Sénégal',
+          address: 'Plateau, Rue 12',
+          isActive: true,
+        });
+        console.log('✅ Fournisseur par défaut créé avec succès');
+      }
+
+      // 6. Créer un produit par défaut
+      const defaultProductSku = 'IPH-15P-256';
+      const existingProduct = await (this.productsService as any).productsRepository.findOne({
+        where: { sku: defaultProductSku },
+      });
+
+      if (!existingProduct) {
+        await this.productsService.create({
+          name: 'iPhone 15 Pro',
+          sku: defaultProductSku,
+          description: 'Dernier iPhone avec puce A17 Pro et cadre en titane',
+          price: 850000,
+          costPrice: 700000,
+          stock: 10,
+          minStock: 2,
+          maxStock: 50,
+          categoryId: category.id,
+          supplierId: supplier.id,
+          isActive: true,
+          unit: 'pièce',
+          barcode: '194253702154',
+          images: ['https://images.unsplash.com/photo-1696446701796-da61225697cc'],
+          taxRate: 18,
+          warehouseStock: { 'wh-001': 10 },
+        } as any);
+        console.log('✅ Produit par défaut créé avec succès');
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de l’initialisation de l’AuthService:', error);
+    }
+  }
 
   // ============ INSCRIPTION ============
 

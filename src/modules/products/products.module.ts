@@ -6,6 +6,7 @@ import { Product } from './entities/product.entity';
 import { ProductVariant } from './entities/product-variant.entity';
 import { CategoriesModule } from '../categories/categories.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
+import { StockModule } from '../stock/stock.module';
 import { VariantsService } from './variants.service';
 
 @Module({
@@ -13,6 +14,7 @@ import { VariantsService } from './variants.service';
     TypeOrmModule.forFeature([Product, ProductVariant]),
     CategoriesModule, // Pour utiliser CategoriesService
     SuppliersModule, // Pour utiliser SuppliersService
+    StockModule, // Pour utiliser StockService
   ],
   controllers: [ProductsController],
   providers: [ProductsService, VariantsService], // ← Ajout de VariantsService

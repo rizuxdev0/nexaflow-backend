@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
+import { PurchaseOrder } from '../../purchase-orders/entities/purchase-order.entity';
 
 @Entity('suppliers')
 export class Supplier {
@@ -51,6 +52,9 @@ export class Supplier {
 
   @OneToMany(() => Product, (product) => product.supplier)
   products: Product[];
+
+  @OneToMany(() => PurchaseOrder, (po) => po.supplier)
+  purchaseOrders: PurchaseOrder[];
 
   @CreateDateColumn()
   createdAt: Date;

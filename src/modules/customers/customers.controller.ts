@@ -42,6 +42,13 @@ export class CustomersController {
     return this.customersService.create(createCustomerDto);
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Statistiques globales des clients' })
+  @ApiResponse({ status: 200, description: 'Statistiques globales' })
+  getGlobalStats() {
+    return this.customersService.getGlobalStats();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Liste paginée des clients' })
   @ApiQuery({ name: 'page', required: false, type: Number })

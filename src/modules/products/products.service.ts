@@ -17,6 +17,10 @@ import {
 } from '../../common/interfaces/paginated-response.interface';
 import { CategoriesService } from '../categories/categories.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
+import { StockService } from '../stock/stock.service';
+import { StockMovementType } from '../stock/entities/stock-movement.entity';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction } from '../audit/entities/audit-log.entity';
 import * as slugify from 'slugify';
 
 // Type pour les produits avec statut de stock
@@ -31,6 +35,8 @@ export class ProductsService {
     private variantsRepository: Repository<ProductVariant>,
     private categoriesService: CategoriesService,
     private suppliersService: SuppliersService,
+    private stockService: StockService,
+    private auditService: AuditService,
   ) {}
 
   private generateSlug(name: string): string {
@@ -103,7 +109,29 @@ export class ProductsService {
       tags: createProductDto.tags || [],
     });
 
-    return await this.productsRepository.save(product);
+    const savedProduct = await this.productsRepository.save(product);
+
+    // Initialiser le mouvement de stock si stock > 0
+    if (savedProduct.stock > 0) {
+      await this.stockService.createMovement({
+        productId: savedProduct.id,
+        type: StockMovementType.IN,
+        quantity: savedProduct.stock,
+        reason: 'Stock initial à la création du produit',
+      });
+    }
+
+    // Logger l'audit
+    await this.auditService.log({
+      userName: 'Système',
+      action: AuditAction.CREATE,
+      resource: 'Product',
+      resourceId: savedProduct.id,
+      details: `Création du produit ${savedProduct.name} (${savedProduct.sku})`,
+      newData: savedProduct,
+    });
+
+    return savedProduct;
   }
 
   async findAll(
@@ -280,8 +308,22 @@ export class ProductsService {
       product.slug = newSlug;
     }
 
+    const oldData = { ...product };
     Object.assign(product, updateProductDto);
-    return await this.productsRepository.save(product);
+    const updatedProduct = await this.productsRepository.save(product);
+
+    // Logger l'audit
+    await this.auditService.log({
+      userName: 'Système',
+      action: AuditAction.UPDATE,
+      resource: 'Product',
+      resourceId: updatedProduct.id,
+      details: `Modification du produit ${updatedProduct.name} (${updatedProduct.sku})`,
+      oldData,
+      newData: updatedProduct,
+    });
+
+    return updatedProduct;
   }
 
   async remove(id: string): Promise<void> {
@@ -292,7 +334,20 @@ export class ProductsService {
       await this.variantsRepository.remove(product.variants);
     }
 
+    const productId = product.id;
+    const productName = product.name;
+    const productSku = product.sku;
+
     await this.productsRepository.remove(product);
+
+    // Logger l'audit
+    await this.auditService.log({
+      userName: 'Système',
+      action: AuditAction.DELETE,
+      resource: 'Product',
+      resourceId: productId,
+      details: `Suppression du produit ${productName} (${productSku})`,
+    });
   }
 
   async toggleStatus(id: string): Promise<Product> {
@@ -310,34 +365,41 @@ export class ProductsService {
   async updateStock(
     id: string,
     updateStockDto: UpdateStockDto,
+    userId?: string,
   ): Promise<Product> {
     const product = await this.findOne(id);
-
-    let newStock = product.stock;
+    let movementType: StockMovementType;
+    let quantity = updateStockDto.quantity;
 
     switch (updateStockDto.operation) {
       case StockOperation.SET:
-        newStock = updateStockDto.quantity;
+        // Pour SET, on calcule la différence pour créer un mouvement IN ou OUT
+        const diff = updateStockDto.quantity - product.stock;
+        if (diff === 0) return product;
+        
+        movementType = diff > 0 ? StockMovementType.IN : StockMovementType.OUT;
+        quantity = Math.abs(diff);
         break;
       case StockOperation.ADD:
-        newStock = product.stock + updateStockDto.quantity;
+        movementType = StockMovementType.IN;
         break;
       case StockOperation.REMOVE:
-        if (product.stock < updateStockDto.quantity) {
-          throw new BadRequestException(
-            `Stock insuffisant. Stock actuel: ${product.stock}, quantité à retirer: ${updateStockDto.quantity}`,
-          );
-        }
-        newStock = product.stock - updateStockDto.quantity;
+        movementType = StockMovementType.OUT;
         break;
+      default:
+        throw new BadRequestException('Opération de stock non reconnue');
     }
 
-    if (newStock < 0) {
-      throw new BadRequestException('Le stock ne peut pas être négatif');
-    }
+    await this.stockService.createMovement({
+      productId: id,
+      type: movementType,
+      quantity: quantity,
+      reason: updateStockDto.reason || 'Mise à jour manuelle du stock',
+      userId: userId,
+      allowNegative: updateStockDto.allowNegative,
+    });
 
-    product.stock = newStock;
-    return await this.productsRepository.save(product);
+    return await this.findOne(id);
   }
 
   async getLowStockProducts(threshold?: number): Promise<Product[]> {
@@ -396,6 +458,43 @@ export class ProductsService {
       relations: ['category'],
       take: 20,
     });
+  }
+ 
+  async getBestSellers(limit: number = 8): Promise<Product[]> {
+    return await this.productsRepository.find({
+      where: { isActive: true },
+      relations: ['category'],
+      order: { salesCount: 'DESC' },
+      take: limit,
+    });
+  }
+ 
+  async getRecommended(productId?: string, limit: number = 4): Promise<Product[]> {
+    let categoryId: string | undefined;
+    
+    if (productId) {
+      const product = await this.findOne(productId);
+      categoryId = product.categoryId;
+    }
+ 
+    const query = this.productsRepository.createQueryBuilder('product')
+      .where('product.isActive = :isActive', { isActive: true })
+      .leftJoinAndSelect('product.category', 'category');
+ 
+    if (productId) {
+      query.andWhere('product.id != :productId', { productId });
+    }
+ 
+    if (categoryId) {
+      query.addOrderBy('CASE WHEN product.categoryId = :categoryId THEN 0 ELSE 1 END', 'ASC');
+      query.setParameter('categoryId', categoryId);
+    }
+ 
+    query.addOrderBy('product.salesCount', 'DESC');
+    query.addOrderBy('RANDOM()');
+    query.take(limit);
+ 
+    return await query.getMany();
   }
 
   async bulkUpdateStock(

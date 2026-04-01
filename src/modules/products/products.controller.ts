@@ -142,6 +142,26 @@ export class ProductsController {
     return this.productsService.searchProducts(query);
   }
 
+  @Get('best-sellers')
+  @ApiOperation({ summary: 'Meilleures ventes' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Liste des meilleures ventes' })
+  getBestSellers(@Query('limit') limit?: number): Promise<Product[]> {
+    return this.productsService.getBestSellers(limit || 8);
+  }
+
+  @Get('recommended')
+  @ApiOperation({ summary: 'Produits recommandés' })
+  @ApiQuery({ name: 'productId', required: false, type: String })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Liste des recommandations' })
+  getRecommended(
+    @Query('productId') productId?: string,
+    @Query('limit') limit?: number
+  ): Promise<Product[]> {
+    return this.productsService.getRecommended(productId, limit || 4);
+  }
+
   @Get('sku/:sku')
   @ApiOperation({ summary: "Détail d'un produit par SKU" })
   @ApiParam({ name: 'sku', description: 'SKU du produit' })

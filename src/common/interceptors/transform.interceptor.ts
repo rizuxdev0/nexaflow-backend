@@ -32,7 +32,7 @@ export class TransformInterceptor<T> implements NestInterceptor<
       map((data) => ({
         statusCode: response.statusCode,
         message: data?.message || 'Success',
-        data: data?.data !== undefined ? data.data : data,
+        data: data,
         timestamp: new Date().toISOString(),
         path: request.url,
       })),

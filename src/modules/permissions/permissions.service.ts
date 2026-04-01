@@ -68,24 +68,22 @@ export class PermissionsService {
   }
 
   async createDefaultPermissions(): Promise<void> {
-    const count = await this.permissionsRepository.count();
-    if (count > 0) return;
-
     const actions = ['create', 'read', 'update', 'delete', 'manage'];
-
-    const permissions: Partial<Permission>[] = [];
 
     for (const resource of resources) {
       for (const action of actions) {
-        permissions.push({
-          name: `${resource}.${action}`,
-          resource,
-          action,
-          description: `Peut ${action === 'manage' ? 'gérer' : action} ${resource}`,
-        });
+        const name = `${resource}.${action}`;
+        const existing = await this.permissionsRepository.findOne({ where: { name } });
+        
+        if (!existing) {
+          await this.permissionsRepository.save({
+            name,
+            resource,
+            action,
+            description: `Peut ${action === 'manage' ? 'gérer' : action} ${resource}`,
+          });
+        }
       }
     }
-
-    await this.permissionsRepository.save(permissions);
   }
 }

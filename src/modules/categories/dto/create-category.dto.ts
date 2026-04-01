@@ -6,7 +6,8 @@ import {
   IsOptional,
   IsUUID,
   IsBoolean,
-  IsUrl,
+  IsArray,
+  IsObject,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -44,7 +45,7 @@ export class CreateCategoryDto {
     description: "URL de l'image",
     example: 'https://example.com/image.jpg',
   })
-  @IsUrl()
+  @IsString()
   @IsOptional()
   image?: string;
 
@@ -56,4 +57,20 @@ export class CreateCategoryDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Traductions de la catégorie',
+    example: { fr: { name: 'Électronique' }, en: { name: 'Electronics' } },
+  })
+  @IsObject()
+  @IsOptional()
+  translations?: { [lang: string]: { name?: string; description?: string } };
+
+  @ApiPropertyOptional({
+    description: 'Attributs personnalisés pour les produits de cette catégorie',
+    example: [{ name: 'Taille', key: 'size', type: 'select' }],
+  })
+  @IsArray()
+  @IsOptional()
+  customAttributes?: any[];
 }

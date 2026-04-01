@@ -14,6 +14,7 @@ import { Customer } from 'src/modules/customers/entities/customer.entity';
 import { User } from 'src/modules/users/entities/user.entity';
 export enum OrderStatus {
   DRAFT = 'draft',
+  PENDING = 'pending',
   CONFIRMED = 'confirmed',
   PROCESSING = 'processing',
   COMPLETED = 'completed',

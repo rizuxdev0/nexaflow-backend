@@ -22,6 +22,13 @@ import {
   PaymentMethod,
 } from '../products/dto/create-pos-order.dto';
 import { PosOrderResponseDto } from '../products/dto/pos-order-response.dto';
+import {
+  PaginatedResponse,
+  PaginatedResponseBuilder,
+} from '../../common/interfaces/paginated-response.interface';
+import { FindOptionsWhere, Like } from 'typeorm';
+import { StockService } from '../stock/stock.service';
+import { StockMovementType } from '../stock/entities/stock-movement.entity';
 
 @Injectable()
 export class OrdersService {
@@ -38,6 +45,7 @@ export class OrdersService {
     private sessionsRepository: Repository<CashSession>,
     private dataSource: DataSource,
     private auditService: AuditService,
+    private stockService: StockService,
   ) {}
 
   //   async createPosOrder(
@@ -219,8 +227,10 @@ export class OrdersService {
   //   }
   async createPosOrder(
     createPosOrderDto: CreatePosOrderDto,
-    userId: string,
+    user: any,
   ): Promise<PosOrderResponseDto> {
+    const userId = user?.id || 'system';
+    const userName = user?.name || 'Utilisateur';
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -328,13 +338,30 @@ export class OrdersService {
         });
         await queryRunner.manager.save(orderItem);
 
-        // Décrémenter le stock
+        // Décrémenter le stock et créer un mouvement
         if (item.variant) {
+          // Note: On utilise le StockService pour s'assurer que les mouvements sont loggés
+          await this.stockService.createMovement({
+            productId: item.productId,
+            type: StockMovementType.OUT,
+            quantity: item.quantity,
+            reason: `Vente POS #${orderNumber}`,
+            reference: savedOrder.id,
+            userId: userId,
+          });
+          // Note: Le service de stock s'occupe de décrémenter le produit, mais peut-être pas la variante si elle est séparée.
+          // Ici on doit s'assurer que si c'est une variante, son stock est aussi mis à jour.
           item.variant.stock -= item.quantity;
           await queryRunner.manager.save(item.variant);
         } else {
-          item.product.stock -= item.quantity;
-          await queryRunner.manager.save(item.product);
+          await this.stockService.createMovement({
+            productId: item.productId,
+            type: StockMovementType.OUT,
+            quantity: item.quantity,
+            reason: `Vente POS #${orderNumber}`,
+            reference: savedOrder.id,
+            userId: userId,
+          });
         }
       }
 
@@ -366,7 +393,7 @@ export class OrdersService {
       // 10. Audit log
       await this.auditService.log({
         userId,
-        userName: 'Utilisateur', // À remplacer par le vrai nom
+        userName,
         action: AuditAction.SALE,
         resource: 'Order',
         resourceId: savedOrder.id,
@@ -458,6 +485,49 @@ export class OrdersService {
     }
 
     return { items: calculatedItems, subtotal };
+  }
+
+  async findAll(
+    page: number = 1,
+    pageSize: number = 20,
+    status?: OrderStatus,
+    paymentStatus?: PaymentStatus,
+    customerId?: string,
+    userId?: string,
+    search?: string,
+  ): Promise<PaginatedResponse<Order>> {
+    const where: FindOptionsWhere<Order> = {};
+
+    if (status) where.status = status;
+    if (paymentStatus) where.paymentStatus = paymentStatus;
+    if (customerId) where.customerId = customerId;
+    if (userId) where.userId = userId;
+    if (search) {
+      where.orderNumber = Like(`%${search}%`);
+    }
+
+    const [data, total] = await this.ordersRepository.findAndCount({
+      where,
+      relations: ['items', 'customer', 'user', 'session'],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      order: { createdAt: 'DESC' },
+    });
+
+    return PaginatedResponseBuilder.build(data, total, page, pageSize);
+  }
+
+  async findOne(id: string): Promise<Order> {
+    const order = await this.ordersRepository.findOne({
+      where: { id },
+      relations: ['items', 'customer', 'user', 'session', 'items.product', 'items.variant'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Commande avec l'ID ${id} non trouvée`);
+    }
+
+    return order;
   }
 
   private async generateOrderNumber(prefix: string = 'CMD'): Promise<string> {

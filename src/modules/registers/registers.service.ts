@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere } from 'typeorm';
@@ -10,14 +11,33 @@ import { Register } from './entities/register.entity';
 import { CreateRegisterDto } from './dto/create-register.dto';
 import { UpdateRegisterDto } from './dto/update-register.dto';
 import { CashSessionsService } from '../cash-sessions/cash-sessions.service';
+import { CashSession } from '../cash-sessions/entities/cash-session.entity';
 
 @Injectable()
-export class RegistersService {
+export class RegistersService implements OnModuleInit {
   constructor(
     @InjectRepository(Register)
     private registersRepository: Repository<Register>,
     private cashSessionsService: CashSessionsService,
   ) {}
+
+  async onModuleInit() {
+    await this.seedRegisters();
+  }
+
+  private async seedRegisters() {
+    const count = await this.registersRepository.count();
+    if (count === 0) {
+      const defaultRegister = this.registersRepository.create({
+        name: 'Caisse Principale',
+        code: 'C-PRINCIPAL',
+        location: 'Comptoir Central',
+        isMain: true,
+        isActive: true,
+      });
+      await this.registersRepository.save(defaultRegister);
+    }
+  }
 
   async create(createRegisterDto: CreateRegisterDto): Promise<Register> {
     // Vérifier si le code existe déjà
@@ -58,8 +78,12 @@ export class RegistersService {
     // Ajouter les sessions actives
     const registersWithSessions = await Promise.all(
       registers.map(async (register) => {
-        const activeSession =
-          await this.cashSessionsService.findActiveByRegister(register.id);
+        let activeSession: CashSession | null = null;
+        try {
+          activeSession = await this.cashSessionsService.findActiveByRegister(register.id);
+        } catch (e) {
+          // Si aucune session active, on continue avec null
+        }
         return {
           ...register,
           activeSession: activeSession || null,
@@ -80,8 +104,13 @@ export class RegistersService {
       throw new NotFoundException(`Caisse avec l'ID "${id}" non trouvée`);
     }
 
-    const activeSession =
-      await this.cashSessionsService.findActiveByRegister(id);
+    let activeSession: CashSession | null = null;
+    try {
+      activeSession = await this.cashSessionsService.findActiveByRegister(id);
+    } catch (e) {
+      // Pas de session active, c'est normal
+    }
+
     return {
       ...register,
       activeSession: activeSession || null,
@@ -137,6 +166,10 @@ export class RegistersService {
         { isMain: true },
         { isMain: false },
       );
+    } else if (updateRegisterDto.isMain === false && register.isMain) {
+      // On ne peut pas "dé-principaliser" une caisse sans en désigner une autre
+      // On force la caisse à rester principale si elle l'était
+      updateRegisterDto.isMain = true;
     }
 
     Object.assign(register, updateRegisterDto);

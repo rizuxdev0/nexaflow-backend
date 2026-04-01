@@ -1,15 +1,37 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Currency } from './entities/currency.entity';
 import { CreateCurrencyDto, UpdateCurrencyDto } from './dto/currency.dto';
 
 @Injectable()
-export class CurrenciesService {
+export class CurrenciesService implements OnModuleInit {
   constructor(
     @InjectRepository(Currency)
     private readonly currencyRepo: Repository<Currency>,
   ) {}
+
+  async onModuleInit() {
+    // 1. Ensure mandatory currencies exist
+    const defaults = [
+      { code: 'XOF', name: 'Franc CFA (BCEAO)', symbol: 'FCFA', isBase: true, exchangeRate: 1 },
+      { code: 'EUR', name: 'Euro', symbol: '€', isBase: false, exchangeRate: 0.001524 },
+      { code: 'USD', name: 'Dollar américain', symbol: '$', isBase: false, exchangeRate: 0.001667 },
+      { code: 'GBP', name: 'Livre sterling', symbol: '£', isBase: false, exchangeRate: 0.001282 },
+    ];
+
+    for (const d of defaults) {
+      const exists = await this.currencyRepo.findOne({ where: { code: d.code } });
+      if (!exists) {
+        await this.currencyRepo.save(this.currencyRepo.create({ ...d, isActive: true }));
+        console.log(`✅ Seeded currency ${d.code}`);
+      } else if (!exists.name || !exists.symbol) {
+        // Patch existing empty records
+        await this.currencyRepo.update(exists.id, { name: d.name, symbol: d.symbol, exchangeRate: exists.exchangeRate || d.exchangeRate });
+        console.log(`🔧 Patched existing currency ${d.code}`);
+      }
+    }
+  }
 
   async findAll() {
     return this.currencyRepo.find({ order: { isBase: 'DESC', code: 'ASC' } });

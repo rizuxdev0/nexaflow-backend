@@ -14,9 +14,9 @@ import { UpdateRolePermissionsDto } from './dto/update-role-permissions.dto';
 @Injectable()
 export class RolesService {
   constructor(
-    @InjectRepository(Role) // ← Vérifier que c'est bien @InjectRepository
+    @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
-    @InjectRepository(Permission) // ← Vérifier que c'est bien @InjectRepository
+    @InjectRepository(Permission)
     private permissionsRepository: Repository<Permission>,
   ) {}
 
@@ -53,38 +53,7 @@ export class RolesService {
     return role;
   }
 
-  // async create(createRoleDto: CreateRoleDto): Promise<Role> {
-  //   // Vérifier si le nom existe déjà
-  //   const existingRole = await this.rolesRepository.findOne({
-  //     where: { name: createRoleDto.name },
-  //   });
-
-  //   if (existingRole) {
-  //     throw new ConflictException(
-  //       `Un rôle avec le nom ${createRoleDto.name} existe déjà`,
-  //     );
-  //   }
-
-  //   // Récupérer les permissions si fournies
-  //   let permissions: Permission[] = [];
-  //   if (createRoleDto.permissionIds?.length) {
-  //     permissions = await this.permissionsRepository.findBy({
-  //       id: In(createRoleDto.permissionIds),
-  //     });
-  //   }
-
-  //   const role = this.rolesRepository.create({
-  //     name: createRoleDto.name,
-  //     label: createRoleDto.label,
-  //     description: createRoleDto.description,
-  //     permissions,
-  //     isSystem: false,
-  //   });
-
-  //   return await this.rolesRepository.save(role);
-  // }
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
-    // Vérifier si le nom existe déjà
     const existingRole = await this.rolesRepository.findOne({
       where: { name: createRoleDto.name },
     });
@@ -95,10 +64,8 @@ export class RolesService {
       );
     }
 
-    // Récupérer les permissions si fournies
     let permissions: Permission[] = [];
     if (createRoleDto.permissionIds?.length) {
-      // ✅ CORRIGÉ: permissionIds au lieu de permissions
       permissions = await this.permissionsRepository.findBy({
         id: In(createRoleDto.permissionIds),
       });
@@ -118,14 +85,12 @@ export class RolesService {
   async update(id: string, updateData: Partial<Role>): Promise<Role> {
     const role = await this.findOne(id);
 
-    // Empêcher la modification des rôles système
     if (role.isSystem) {
       throw new BadRequestException(
         'Les rôles système ne peuvent pas être modifiés',
       );
     }
 
-    // Vérifier l'unicité du nom si modifié
     if (updateData.name && updateData.name !== role.name) {
       const existingRole = await this.rolesRepository.findOne({
         where: { name: updateData.name },
@@ -144,14 +109,12 @@ export class RolesService {
   async remove(id: string): Promise<void> {
     const role = await this.findOne(id);
 
-    // Empêcher la suppression des rôles système
     if (role.isSystem) {
       throw new BadRequestException(
         'Les rôles système ne peuvent pas être supprimés',
       );
     }
 
-    // Vérifier si des utilisateurs sont assignés à ce rôle
     if (role.users && role.users.length > 0) {
       throw new BadRequestException(
         `Impossible de supprimer ce rôle car ${role.users.length} utilisateur(s) y sont assignés`,
@@ -167,9 +130,7 @@ export class RolesService {
   ): Promise<Role> {
     const role = await this.findOne(id);
 
-    // Empêcher la modification des permissions des rôles système
     if (role.isSystem && role.name !== 'super_admin') {
-      // super_admin peut être modifié, pas les autres rôles système
       throw new BadRequestException(
         'Les permissions des rôles système ne peuvent pas être modifiées',
       );
@@ -222,66 +183,72 @@ export class RolesService {
     const defaultRoles = this.getDefaultRoles();
 
     for (const roleData of defaultRoles) {
-      const existingRole = await this.rolesRepository.findOne({
+      let role = await this.rolesRepository.findOne({
         where: { name: roleData.name },
+        relations: ['permissions'],
       });
 
-      if (!existingRole) {
-        let rolePermissions: Permission[] = [];
+      let rolePermissions: Permission[] = [];
+      switch (roleData.name) {
+        case 'super_admin':
+          rolePermissions = permissions;
+          break;
+        case 'admin':
+          rolePermissions = permissions.filter(
+            (p) =>
+              !p.name.startsWith('roles.') && !p.name.startsWith('settings.'),
+          );
+          break;
+        case 'manager':
+          rolePermissions = permissions.filter((p) =>
+            [
+              'dashboard.read',
+              'products.',
+              'categories.',
+              'suppliers.',
+              'stock.',
+              'registers.',
+              'pos.',
+              'orders.',
+              'invoices.',
+              'customers.',
+              'reports.',
+            ].some((prefix) => p.name.startsWith(prefix)),
+          );
+          break;
+        case 'cashier':
+          rolePermissions = permissions.filter((p) =>
+            [
+              'products.read',
+              'pos.',
+              'registers.read',
+              'orders.read',
+              'invoices.read',
+              'customers.read',
+            ].includes(p.name),
+          );
+          break;
+        case 'customer':
+          rolePermissions = permissions.filter((p) =>
+            ['shop.', 'orders.read'].some((prefix) =>
+              p.name.startsWith(prefix),
+            ),
+          );
+          break;
+      }
 
-        // Assigner les permissions selon le rôle
-        switch (roleData.name) {
-          case 'super_admin':
-            rolePermissions = permissions; // Toutes les permissions
-            break;
-          case 'admin':
-            rolePermissions = permissions.filter(
-              (p) =>
-                !p.name.startsWith('roles.') && !p.name.startsWith('settings.'),
-            );
-            break;
-          case 'manager':
-            rolePermissions = permissions.filter((p) =>
-              [
-                'dashboard.read',
-                'products.',
-                'categories.',
-                'suppliers.',
-                'stock.',
-                'registers.',
-                'pos.',
-                'orders.',
-                'invoices.',
-                'customers.',
-                'reports.',
-              ].some((prefix) => p.name.startsWith(prefix)),
-            );
-            break;
-          case 'cashier':
-            rolePermissions = permissions.filter((p) =>
-              [
-                'products.read',
-                'pos.',
-                'registers.read',
-                'orders.read',
-                'invoices.read',
-                'customers.read',
-              ].includes(p.name),
-            );
-            break;
-          case 'customer':
-            rolePermissions = permissions.filter((p) =>
-              ['shop.', 'orders.read'].some((prefix) =>
-                p.name.startsWith(prefix),
-              ),
-            );
-            break;
-        }
-
-        const role = this.rolesRepository.create({
-          ...roleData,
+      if (!role) {
+        const newRole = this.rolesRepository.create({
+          name: roleData.name,
+          label: roleData.label,
+          description: roleData.description,
+          isSystem: roleData.isSystem,
           permissions: rolePermissions,
         });
+        await this.rolesRepository.save(newRole);
+      } else if (['super_admin', 'admin', 'manager'].includes(role.name)) {
+        // Toujours s'assurer que les rôles admin ont les dernières permissions associées
+        role.permissions = rolePermissions;
         await this.rolesRepository.save(role);
       }
     }

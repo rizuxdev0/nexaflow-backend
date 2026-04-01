@@ -101,6 +101,9 @@ export class Product {
   @Column({ type: 'simple-array', nullable: true })
   tags: string[];
 
+  @Column({ default: 0 })
+  salesCount: number;
+
   @Column({ type: 'jsonb', nullable: true })
   wholesaleTiers: { minQuantity: number; price: number; discount: number }[];
 

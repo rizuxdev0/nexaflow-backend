@@ -15,6 +15,9 @@ export class Currency {
   code: string; // e.g. USD, EUR, FCFA
 
   @Column({ nullable: true })
+  name: string; // e.g. Dollar, Euro, Franc CFA
+
+  @Column({ nullable: true })
   symbol: string; // e.g. $, €, F
 
   @Column({ type: 'decimal', precision: 10, scale: 4, default: 1.0 })

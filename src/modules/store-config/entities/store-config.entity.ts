@@ -21,6 +21,9 @@ export class StoreConfig {
   social: any;
 
   @Column({ type: 'jsonb', default: [] })
+  partners: any[];
+
+  @Column({ type: 'jsonb', default: [] })
   features: any[];
 
 

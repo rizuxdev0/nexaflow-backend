@@ -15,4 +15,5 @@ export const resources = [
   'roles',
   'settings',
   'reports',
+  'store_config',
 ];

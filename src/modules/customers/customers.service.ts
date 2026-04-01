@@ -225,4 +225,28 @@ export class CustomersService {
       });
     }
   }
+
+  async getGlobalStats() {
+    const [total, active, inactive] = await Promise.all([
+      this.customersRepository.count(),
+      this.customersRepository.count({ where: { isActive: true } }),
+      this.customersRepository.count({ where: { isActive: false } }),
+    ]);
+
+    const top5 = await this.getTopCustomers(5);
+    const topRevenue = top5.reduce((sum, c) => sum + Number(c.totalSpent || 0), 0);
+
+    const result = await this.customersRepository
+      .createQueryBuilder('customer')
+      .select('AVG(customer.totalSpent)', 'avgSpent')
+      .getRawOne();
+
+    return {
+      total,
+      active,
+      inactive,
+      topRevenue,
+      avgSpent: Math.round(Number(result?.avgSpent || 0)),
+    };
+  }
 }

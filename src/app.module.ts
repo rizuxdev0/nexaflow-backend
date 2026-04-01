@@ -20,6 +20,7 @@ import { InvoicesModule } from './modules/invoices/invoices.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ShopModule } from './modules/shop/shop.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { OrdersModule } from './modules/orders/orders.module';
 import { UsersController } from './modules/users/users.controller';
 import { UsersModule } from './modules/users/users.module';
 import { RolesService } from './modules/roles/roles.service';
@@ -86,6 +87,7 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
     RegistersModule,
     CashSessionsModule,
     InvoicesModule,
+    OrdersModule,
 
     // Phase 3 - Gestion de la clientèle et du point de vente
     CustomersModule,
@@ -101,7 +103,6 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
     AuditModule,
 
     ExpensesModule,
-    CurrenciesModule,
     WebhooksModule,
     StoreConfigModule,
 
