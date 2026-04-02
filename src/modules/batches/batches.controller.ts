@@ -29,6 +29,18 @@ export class BatchesController {
     return this.batchesService.getStats();
   }
 
+  @Get('expiring-soon')
+  @Permissions('stock.read')
+  getExpiringSoon(@Query('days') days?: number) {
+    return this.batchesService.getExpiringSoon(days || 30);
+  }
+
+  @Get('expired')
+  @Permissions('stock.read')
+  getExpired() {
+    return this.batchesService.getExpired();
+  }
+
   @Get(':id')
   @Permissions('stock.read')
   getById(@Param('id') id: string) {

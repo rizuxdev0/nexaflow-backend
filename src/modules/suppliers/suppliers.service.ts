@@ -504,6 +504,13 @@ export class SuppliersService {
     return supplier;
   }
 
+  async findAllFlat(): Promise<Supplier[]> {
+    return await this.suppliersRepository.find({
+      where: { isActive: true },
+      order: { name: 'ASC' },
+    });
+  }
+
   async getTopSuppliers(limit: number = 10): Promise<Supplier[]> {
     return await this.suppliersRepository.find({
       where: { isActive: true },

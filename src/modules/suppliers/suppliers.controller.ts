@@ -65,6 +65,13 @@ export class SuppliersController {
     return this.suppliersService.getGlobalStats();
   }
 
+  @Get('flat')
+  @ApiOperation({ summary: 'Liste plate de tous les fournisseurs actifs (pour dropdowns)' })
+  @ApiResponse({ status: 200, description: 'Liste des fournisseurs actifs' })
+  findAllFlat(): Promise<Supplier[]> {
+    return this.suppliersService.findAllFlat();
+  }
+
   @Get('top')
   @ApiOperation({ summary: 'Top fournisseurs par note' })
   @ApiQuery({ name: 'limit', required: false, type: Number })

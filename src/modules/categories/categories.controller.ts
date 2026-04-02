@@ -57,6 +57,13 @@ export class CategoriesController {
     );
   }
 
+  @Get('flat')
+  @ApiOperation({ summary: 'Liste plate de toutes les catégories actives (pour dropdowns)' })
+  @ApiResponse({ status: 200, description: 'Liste des catégories actives' })
+  findAllFlat(): Promise<Category[]> {
+    return this.categoriesService.findAllFlat();
+  }
+
   @Get('tree')
   @ApiOperation({ summary: 'Arborescence complète des catégories' })
   @ApiResponse({ status: 200, description: 'Arborescence des catégories' })

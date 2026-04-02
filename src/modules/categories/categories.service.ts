@@ -225,6 +225,13 @@ export class CategoriesService {
     return await this.categoriesRepository.save(category);
   }
 
+  async findAllFlat(): Promise<Category[]> {
+    return await this.categoriesRepository.find({
+      where: { isActive: true },
+      order: { name: 'ASC' },
+    });
+  }
+
   async getCategoryTree(): Promise<Category[]> {
     const categories = await this.categoriesRepository.find({
       //   where: { parentId: null },

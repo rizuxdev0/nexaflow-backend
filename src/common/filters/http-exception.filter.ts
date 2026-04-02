@@ -39,6 +39,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       method: request.method,
       message: typeof message === 'string' ? message : message['message'],
       error: typeof message === 'string' ? null : message['error'],
+      errors: typeof message === 'string' ? null : message['errors'],
       ...(process.env.NODE_ENV === 'development' && {
         stack: exception instanceof Error ? exception.stack : null,
       }),

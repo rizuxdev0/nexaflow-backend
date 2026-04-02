@@ -256,6 +256,35 @@ export class BatchesService {
     return result.affected || 0;
   }
 
+  async getExpiringSoon(days: number = 30) {
+    const now = new Date();
+    const soon = new Date();
+    soon.setDate(now.getDate() + Number(days));
+
+    return await this.batchRepository.find({
+      where: {
+        status: BatchStatus.ACTIVE,
+        expirationDate: Between(now, soon),
+      },
+      relations: ['product', 'warehouse', 'supplier'],
+      order: { expirationDate: 'ASC' },
+      take: 50
+    });
+  }
+
+  async getExpired() {
+    const now = new Date();
+    return await this.batchRepository.find({
+      where: [
+        { status: BatchStatus.EXPIRED },
+        { status: BatchStatus.ACTIVE, expirationDate: Between(new Date(0), now) }
+      ],
+      relations: ['product', 'warehouse', 'supplier'],
+      order: { expirationDate: 'DESC' },
+      take: 50
+    });
+  }
+
   async getStats() {
     const now = new Date();
     const soon = new Date();

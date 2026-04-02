@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Post, Body } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -27,6 +27,14 @@ export class AuditController {
     @Query() filterDto: AuditFilterDto,
   ): Promise<PaginatedResponse<AuditResponseDto>> {
     return this.auditService.findAll(filterDto);
+  }
+
+  @Post()
+  @Permissions('reports.read') // Adjust or omit depending on access level needed, but keeping role
+  @ApiOperation({ summary: "Ajouter un log d'audit manuellement" })
+  @ApiResponse({ status: 201, description: 'Log créé' })
+  async createLog(@Body() payload: any) {
+    return this.auditService.log(payload);
   }
 
   @Get('stats')
