@@ -26,6 +26,9 @@ export class StoreConfig {
   @Column({ type: 'jsonb', default: [] })
   features: any[];
 
+  @Column({ type: 'jsonb', default: {} })
+  appearance: any;
+
 
   @UpdateDateColumn()
   updatedAt: Date;

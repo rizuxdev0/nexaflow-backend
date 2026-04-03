@@ -66,7 +66,7 @@ export class CreateProductDto {
 
   @ApiProperty({ description: 'SKU unique', example: 'SMS-S23-BLK-128' })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @MaxLength(50)
   sku: string;
 
@@ -184,7 +184,7 @@ export class CreateProductDto {
     example: ['https://example.com/image1.jpg'],
   })
   @IsArray()
-  @IsUrl({}, { each: true })
+  @IsUrl({ require_tld: false }, { each: true })
   @IsOptional()
   images?: string[];
 

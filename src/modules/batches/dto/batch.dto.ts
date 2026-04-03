@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsEnum, IsUUID, Min, Max, IsDateString } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsEnum, IsUUID, Min, Max, IsDateString, IsDate } from 'class-validator';
+import { Type } from 'class-transformer';
 import { BatchStatus } from '../entities/batch.entity';
 
 export class CreateBatchDto {
@@ -26,15 +27,18 @@ export class CreateBatchDto {
   @IsNotEmpty()
   warehouseId: string;
 
-  @IsDateString()
+  @IsDate()
+  @Type(() => Date)
   @IsOptional()
   manufacturingDate?: Date;
 
-  @IsDateString()
+  @IsDate()
+  @Type(() => Date)
   @IsOptional()
   expirationDate?: Date;
 
-  @IsDateString()
+  @IsDate()
+  @Type(() => Date)
   @IsOptional()
   receivedDate?: Date;
 

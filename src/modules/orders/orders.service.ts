@@ -492,35 +492,98 @@ export class OrdersService {
     pageSize: number = 20,
     status?: OrderStatus,
     paymentStatus?: PaymentStatus,
+    paymentMethod?: string,
+    source?: string,
     customerId?: string,
     userId?: string,
     search?: string,
+    dateFrom?: Date,
+    dateTo?: Date,
   ): Promise<PaginatedResponse<Order>> {
-    const where: FindOptionsWhere<Order> = {};
+    const qb = this.ordersRepository.createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'items')
+      .leftJoinAndSelect('o.customer', 'customer')
+      .leftJoinAndSelect('o.user', 'user')
+      .leftJoinAndSelect('o.session', 'session');
 
-    if (status) where.status = status;
-    if (paymentStatus) where.paymentStatus = paymentStatus;
-    if (customerId) where.customerId = customerId;
-    if (userId) where.userId = userId;
-    if (search) {
-      where.orderNumber = Like(`%${search}%`);
+    if (status && status !== 'all' as any) qb.andWhere('o.status = :status', { status });
+    if (paymentStatus && paymentStatus !== 'all' as any) qb.andWhere('o.paymentStatus = :paymentStatus', { paymentStatus });
+    if (paymentMethod && paymentMethod !== 'all' as any) qb.andWhere('o.paymentMethod = :paymentMethod', { paymentMethod });
+    
+    if (source && source !== 'all') {
+      if (source === 'pos') {
+        qb.andWhere('o.sessionId IS NOT NULL');
+      } else if (source === 'ecommerce') {
+        qb.andWhere('o.sessionId IS NULL');
+      }
     }
 
-    const [data, total] = await this.ordersRepository.findAndCount({
-      where,
-      relations: ['items', 'customer', 'user', 'session'],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      order: { createdAt: 'DESC' },
-    });
+    if (customerId) qb.andWhere('o.customerId = :customerId', { customerId });
+    if (userId) qb.andWhere('o.userId = :userId', { userId });
+    if (search) {
+      qb.andWhere('(o.orderNumber LIKE :search OR o.customerName LIKE :search)', { search: `%${search}%` });
+    }
+    if (dateFrom) qb.andWhere('o.createdAt >= :dateFrom', { dateFrom });
+    if (dateTo) qb.andWhere('o.createdAt <= :dateTo', { dateTo });
+
+    qb.orderBy('o.createdAt', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    const [data, total] = await qb.getManyAndCount();
 
     return PaginatedResponseBuilder.build(data, total, page, pageSize);
+  }
+
+  async getStats(
+    status?: OrderStatus,
+    paymentStatus?: PaymentStatus,
+    customerId?: string,
+    userId?: string,
+    search?: string,
+    dateFrom?: Date,
+    dateTo?: Date,
+  ) {
+    const qb = this.ordersRepository.createQueryBuilder('o');
+
+    if (status) qb.andWhere('o.status = :status', { status });
+    if (paymentStatus) qb.andWhere('o.paymentStatus = :paymentStatus', { paymentStatus });
+    if (customerId) qb.andWhere('o.customerId = :customerId', { customerId });
+    if (userId) qb.andWhere('o.userId = :userId', { userId });
+    if (search) {
+      qb.andWhere('o.orderNumber LIKE :search', { search: `%${search}%` });
+    }
+    if (dateFrom) qb.andWhere('o.createdAt >= :dateFrom', { dateFrom });
+    if (dateTo) qb.andWhere('o.createdAt <= :dateTo', { dateTo });
+
+    const totalOrders = await qb.getCount();
+
+    // Sum totals, note that SUM returns a string so we parse it
+    const sumResult = await qb.select('SUM(o.total)', 'revenue').getRawOne();
+    const totalRevenue = parseFloat(sumResult?.revenue || '0');
+
+    // Count pending
+    const pendingOrders = await qb.clone()
+      .andWhere('o.status IN (:...pendingStatuses)', { pendingStatuses: [OrderStatus.PENDING, OrderStatus.PROCESSING] })
+      .getCount();
+
+    // Sources breakdown: POS has a sessionId, E-commerce does not
+    const posSales = await qb.clone().andWhere('o.sessionId IS NOT NULL').getCount();
+    const ecomSales = await qb.clone().andWhere('o.sessionId IS NULL').getCount();
+
+    return {
+      totalOrders,
+      totalRevenue,
+      pendingOrders,
+      posSales,
+      ecomSales,
+    };
   }
 
   async findOne(id: string): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: ['items', 'customer', 'user', 'session', 'items.product', 'items.variant'],
+      relations: ['items', 'customer', 'user', 'session', 'items.product'],
     });
 
     if (!order) {
@@ -528,6 +591,14 @@ export class OrdersService {
     }
 
     return order;
+  }
+
+  async findRecent(limit: number = 10): Promise<Order[]> {
+    return this.ordersRepository.find({
+      relations: ['items', 'customer', 'user'],
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
   }
 
   private async generateOrderNumber(prefix: string = 'CMD'): Promise<string> {

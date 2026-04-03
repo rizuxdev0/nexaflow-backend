@@ -24,7 +24,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateStockDto } from './dto/update-stock.dto';
 import { Product } from './entities/product.entity';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ProductFilterDto } from './dto/product-filter.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 import { VariantsService } from './variants.service';
 import { VariantResponseDto } from './dto/variant-response.dto';
@@ -64,25 +64,19 @@ export class ProductsController {
   @ApiQuery({ name: 'isFeatured', required: false, type: Boolean })
   @ApiResponse({ status: 200, description: 'Liste des produits' })
   findAll(
-    @Query() paginationDto: PaginationDto,
-    @Query('categoryId') categoryId?: string,
-    @Query('supplierId') supplierId?: string,
-    @Query('minPrice') minPrice?: number,
-    @Query('maxPrice') maxPrice?: number,
-    @Query('inStock') inStock?: boolean,
-    @Query('isFeatured') isFeatured?: boolean,
+    @Query() filterDto: ProductFilterDto,
   ): Promise<PaginatedResponse<Product>> {
     return this.productsService.findAll(
-      paginationDto.page,
-      paginationDto.pageSize,
-      paginationDto.search,
-      categoryId,
-      supplierId,
+      filterDto.page,
+      filterDto.pageSize,
+      filterDto.search,
+      filterDto.categoryId,
+      filterDto.supplierId,
       undefined, // isActive
-      isFeatured,
-      minPrice,
-      maxPrice,
-      inStock,
+      filterDto.isFeatured,
+      filterDto.minPrice,
+      filterDto.maxPrice,
+      filterDto.inStock,
     );
   }
 

@@ -23,4 +23,12 @@ export class OpenSessionDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsString()
+  @IsOptional()
+  userId?: string;
+
+  @IsString()
+  @IsOptional()
+  userName?: string;
 }

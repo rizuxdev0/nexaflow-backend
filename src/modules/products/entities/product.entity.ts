@@ -29,7 +29,7 @@ export class Product {
   @Column({ nullable: true })
   shortDescription: string;
 
-  @Column({ unique: true, length: 50 })
+  @Column({ unique: true, length: 50, nullable: true })
   sku: string;
 
   @Column({ nullable: true, length: 100 })
@@ -108,8 +108,13 @@ export class Product {
   wholesaleTiers: { minQuantity: number; price: number; discount: number }[];
 
   @Column({ type: 'jsonb', nullable: true })
-  translations: { [lang: string]: { name?: string; description?: string; shortDescription?: string } };
-
+  translations: {
+    [lang: string]: {
+      name?: string;
+      description?: string;
+      shortDescription?: string;
+    };
+  };
 
   @OneToMany(() => ProductVariant, (variant) => variant.product)
   variants: ProductVariant[];

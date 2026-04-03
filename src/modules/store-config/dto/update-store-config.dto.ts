@@ -7,4 +7,5 @@ export class UpdateStoreConfigDto {
   @ApiPropertyOptional() @IsOptional() @IsObject() content?: any;
   @ApiPropertyOptional() @IsOptional() @IsArray() partners?: any[];
   @ApiPropertyOptional() @IsOptional() @IsArray() features?: any[];
+  @ApiPropertyOptional() @IsOptional() @IsObject() appearance?: any;
 }

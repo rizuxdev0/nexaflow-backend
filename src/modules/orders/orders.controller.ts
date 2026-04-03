@@ -51,10 +51,41 @@ export class OrdersController {
       filterDto.pageSize,
       filterDto.status,
       filterDto.paymentStatus,
+      filterDto.paymentMethod,
+      filterDto.source,
       filterDto.customerId,
       filterDto.userId,
       filterDto.search || filterDto.orderNumber,
+      filterDto.dateFrom ? new Date(filterDto.dateFrom) : undefined,
+      filterDto.dateTo ? new Date(filterDto.dateTo) : undefined,
     );
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Obtenir les statistiques des commandes selon les filtres' })
+  @ApiResponse({ status: 200, description: 'Statistiques des commandes' })
+  getStats(
+    @Query() filterDto: OrderFilterDto,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.ordersService.getStats(
+      filterDto.status,
+      filterDto.paymentStatus,
+      filterDto.customerId,
+      filterDto.userId,
+      filterDto.search || filterDto.orderNumber,
+      dateFrom ? new Date(dateFrom) : undefined,
+      dateTo ? new Date(dateTo) : undefined,
+    );
+  }
+
+  @Get('recent')
+  @ApiOperation({ summary: 'Dernières commandes récentes' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Nombre de commandes à retourner (max 50)' })
+  @ApiResponse({ status: 200, description: 'Liste des commandes récentes' })
+  async findRecent(@Query('limit') limit?: number): Promise<Order[]> {
+    return this.ordersService.findRecent(Math.min(limit || 10, 50));
   }
 
   @Get(':id')

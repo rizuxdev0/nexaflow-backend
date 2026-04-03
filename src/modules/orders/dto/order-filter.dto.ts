@@ -22,4 +22,20 @@ export class OrderFilterDto extends PaginationDto {
   @IsOptional()
   @IsString()
   orderNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsString()
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
+  dateFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  dateTo?: string;
 }

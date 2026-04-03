@@ -55,6 +55,12 @@ export class ProductsService {
   }
 
   async create(createProductDto: CreateProductDto): Promise<Product> {
+    // Générer un SKU s'il n'est pas fourni ou s'il vaut 'undefined'
+    if (!createProductDto.sku || createProductDto.sku === 'undefined') {
+      const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+      createProductDto.sku = `PRD-${Date.now().toString().slice(-4)}${randomPart}`;
+    }
+
     // Vérifier si le SKU existe déjà
     const existingSku = await this.productsRepository.findOne({
       where: { sku: createProductDto.sku },
@@ -338,16 +344,37 @@ export class ProductsService {
     const productName = product.name;
     const productSku = product.sku;
 
-    await this.productsRepository.remove(product);
-
-    // Logger l'audit
-    await this.auditService.log({
-      userName: 'Système',
-      action: AuditAction.DELETE,
-      resource: 'Product',
-      resourceId: productId,
-      details: `Suppression du produit ${productName} (${productSku})`,
-    });
+    try {
+      await this.productsRepository.remove(product);
+      
+      // Logger l'audit
+      await this.auditService.log({
+        userName: 'Système',
+        action: AuditAction.DELETE,
+        resource: 'Product',
+        resourceId: productId,
+        details: `Suppression du produit ${productName} (${productSku})`,
+      });
+    } catch (error) {
+      // Si violation de clé étrangère (ex: lié aux commandes ou mouvements de stock)
+      if (error.message && (error.message.includes('foreign key constraint') || error.message.includes('clé étrangère'))) {
+        product.isActive = false;
+        product.sku = `${product.sku || 'DEL'}-${Date.now().toString().slice(-6)}`;
+        product.slug = `${product.slug}-${Date.now()}`;
+        await this.productsRepository.save(product);
+        
+        // Logger l'audit comme archivage au lieu de suppression dure
+        await this.auditService.log({
+          userName: 'Système',
+          action: AuditAction.UPDATE,
+          resource: 'Product',
+          resourceId: productId,
+          details: `Archivage automatique (Soft Delete) suite à contrainte de liaison pour: ${productName}`,
+        });
+      } else {
+        throw error;
+      }
+    }
   }
 
   async toggleStatus(id: string): Promise<Product> {
@@ -473,28 +500,48 @@ export class ProductsService {
     let categoryId: string | undefined;
     
     if (productId) {
-      const product = await this.findOne(productId);
-      categoryId = product.categoryId;
+      try {
+        const product = await this.findOne(productId);
+        categoryId = product.categoryId;
+      } catch (error) {
+        // Ignorer l'erreur si produit introuvable
+      }
     }
  
-    const query = this.productsRepository.createQueryBuilder('product')
-      .where('product.isActive = :isActive', { isActive: true })
-      .leftJoinAndSelect('product.category', 'category');
- 
-    if (productId) {
-      query.andWhere('product.id != :productId', { productId });
-    }
- 
+    const baseWhere: any = { isActive: true };
+    let results: Product[] = [];
+
+    // Priorité à la même catégorie
     if (categoryId) {
-      query.addOrderBy('CASE WHEN product.categoryId = :categoryId THEN 0 ELSE 1 END', 'ASC');
-      query.setParameter('categoryId', categoryId);
+      const sameCat = await this.productsRepository.find({
+        where: productId ? { isActive: true, categoryId } : { isActive: true, categoryId },
+        relations: ['category'],
+        order: { salesCount: 'DESC' },
+        take: limit * 2,
+      });
+      results = sameCat.filter(p => p.id !== productId);
     }
- 
-    query.addOrderBy('product.salesCount', 'DESC');
-    query.addOrderBy('RANDOM()');
-    query.take(limit);
- 
-    return await query.getMany();
+
+    // Compléter avec d'autres produits
+    if (results.length < limit) {
+      const existingIds = results.map(p => p.id);
+      if (productId) existingIds.push(productId);
+
+      const others = await this.productsRepository.find({
+        where: { ...baseWhere },
+        relations: ['category'],
+        order: { salesCount: 'DESC' },
+        take: limit * 3, // On prend plus pour mélanger
+      });
+
+      const filtered = others.filter(p => !existingIds.includes(p.id));
+      results = [...results, ...filtered];
+    }
+
+    // Mélanger un peu pour la diversité (pas 100% aléatoire mais simule RANDOM())
+    results = results.sort(() => Math.random() - 0.5);
+
+    return results.slice(0, limit);
   }
 
   async bulkUpdateStock(

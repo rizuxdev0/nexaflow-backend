@@ -53,6 +53,9 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
+import { UploadModule } from './modules/upload/upload.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 
 
@@ -123,10 +126,11 @@ import { ExpensesModule } from './modules/expenses/expenses.module';
     ReportsModule,
     NotificationsModule,
     CashRegistersModule,
-
-
-
-
+    UploadModule,
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads'),
+      serveRoot: '/uploads',
+    }),
   ],
   controllers: [AppController, UsersController, RolesController],
   providers: [

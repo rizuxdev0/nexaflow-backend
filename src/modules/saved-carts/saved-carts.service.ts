@@ -44,6 +44,17 @@ export class SavedCartsService {
     return this.cartRepository.remove(cart);
   }
 
+  async findByCustomer(customerId: string) {
+    return this.cartRepository.find({
+      where: { customerId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async removeByCustomer(customerId: string) {
+    return this.cartRepository.delete({ customerId });
+  }
+
   // Cleanup expired carts?
   async cleanup() {
     return this.cartRepository

@@ -11,6 +11,12 @@ export class StoreConfigService {
     private readonly configRepository: Repository<StoreConfig>,
   ) {}
 
+  // Sanitize partners: ensure each element is a plain object, not an array or primitive
+  private sanitizePartners(raw: any[]): any[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(p => p && typeof p === 'object' && !Array.isArray(p));
+  }
+
   async get(): Promise<StoreConfig> {
     const defaultFeatures = [
       { id: 'deferred_payments', label: 'Paiements différés', description: 'Permettre aux clients de payer en plusieurs fois avec échéancier', enabled: true, category: 'finance', icon: 'Building2' },
@@ -25,6 +31,9 @@ export class StoreConfigService {
       { id: 'product_compare', label: 'Comparaison de produits', description: 'Permettre aux clients de comparer des produits côte à côte', enabled: true, category: 'customer', icon: 'ArrowLeftRight' },
       { id: 'reviews', label: 'Avis clients', description: 'Permettre aux clients de noter et commenter les produits', enabled: true, category: 'customer', icon: 'Star' },
       { id: 'saved_carts', label: 'Paniers sauvegardés', description: 'Sauvegarder des paniers pour les clients récurrents', enabled: true, category: 'commerce', icon: 'ShoppingBag' },
+      { id: 'marketplace', label: 'Marketplace', description: 'Activer les outils de place de marché multi-vendeurs', enabled: false, category: 'commerce', icon: 'Building2' },
+      { id: 'subscriptions', label: 'Abonnements', description: 'Vendre des abonnements et paiements récurrents', enabled: false, category: 'finance', icon: 'Receipt' },
+      { id: 'b2b_portal', label: 'Portail B2B', description: 'Interface de vente en gros avec prix sur mesure', enabled: false, category: 'commerce', icon: 'Building' }
     ];
 
     let config = await this.configRepository.findOne({ where: { id: 'default' } });
@@ -93,10 +102,22 @@ export class StoreConfigService {
           { id: 'p1', name: 'Samsung', logoUrl: '', website: 'https://samsung.com', enabled: true },
           { id: 'p2', name: 'Apple', logoUrl: '', website: 'https://apple.com', enabled: true }
         ],
-        features: defaultFeatures
+        features: defaultFeatures,
+        appearance: {
+          theme: 'blue',
+          darkMode: false,
+          language: 'fr'
+        }
       });
       await this.configRepository.save(config);
     } else {
+      // Sanitize partners on read to auto-fix any corrupted data (e.g. [[], []])
+      if (Array.isArray(config.partners)) {
+        const clean = this.sanitizePartners(config.partners);
+        if (clean.length !== config.partners.length) {
+          config.partners = clean;
+        }
+      }
       // Sync missing features into existing config (Upgrade logic)
       let changed = false;
       // Clean sync logic: Rebuild the features list based on ID to prevent duplicates and data corruption
@@ -106,8 +127,12 @@ export class StoreConfigService {
         return existing ? { ...def, ...existing } : def;
       });
 
-      // If lengths differ or some IDs were missing, update the entry
-      if (existingFeatures.length !== updatedFeatures.length || JSON.stringify(existingFeatures) !== JSON.stringify(updatedFeatures)) {
+      // If lengths differ or missing IDs, update the entry.
+      // Do a simple check instead of JSON.stringify to avoid key order issues
+      const needsUpdate = existingFeatures.length !== updatedFeatures.length || 
+                          updatedFeatures.some((uf, i) => !existingFeatures[i] || existingFeatures[i].id !== uf.id);
+      
+      if (needsUpdate) {
         config.features = updatedFeatures;
         changed = true;
       }
@@ -124,8 +149,43 @@ export class StoreConfigService {
         changed = true;
       }
 
+      // Ensure appearance exists for old configs
+      if (!config.appearance) {
+        config.appearance = {
+          theme: 'blue',
+          darkMode: false,
+          language: 'fr'
+        };
+        changed = true;
+      }
+
       if (changed) {
-        await this.configRepository.save(config);
+        // Use raw SQL to avoid TypeORM JSONB tracking bugs that would overwrite other columns
+        await this.configRepository.query(
+          `UPDATE store_config SET
+            identity  = $1::jsonb,
+            checkout  = $2::jsonb,
+            content   = $3::jsonb,
+            seo       = $4::jsonb,
+            social    = $5::jsonb,
+            partners  = $6::jsonb,
+            features  = $7::jsonb,
+            appearance = $8::jsonb,
+            "updatedAt" = NOW()
+           WHERE id = 'default'`,
+          [
+            JSON.stringify(config.identity || {}),
+            JSON.stringify(config.checkout || {}),
+            JSON.stringify(config.content || {}),
+            JSON.stringify(config.seo || {}),
+            JSON.stringify(config.social || {}),
+            JSON.stringify(Array.isArray(config.partners) ? config.partners : []),
+            JSON.stringify(Array.isArray(config.features) ? config.features : []),
+            JSON.stringify(config.appearance || {}),
+          ]
+        );
+        // Reload fresh from DB so we return the true persisted state
+        config = (await this.configRepository.findOne({ where: { id: 'default' } }))!;
       }
     }
     
@@ -152,15 +212,47 @@ export class StoreConfigService {
       }
     }
     
-    // Overwrite arrays entirely as typically intended in this UI
-    if (updateStoreConfigDto.partners) {
-      config.partners = updateStoreConfigDto.partners;
+    // Overwrite arrays entirely — sanitize to prevent corrupted [[], []] from entering DB
+    if (updateStoreConfigDto.partners !== undefined) {
+      config.partners = this.sanitizePartners(
+        JSON.parse(JSON.stringify(updateStoreConfigDto.partners))
+      );
     }
     if (updateStoreConfigDto.features) {
-      config.features = updateStoreConfigDto.features;
+      config.features = JSON.parse(JSON.stringify(updateStoreConfigDto.features));
+    }
+    if (updateStoreConfigDto.appearance) {
+      config.appearance = { ...config.appearance, ...updateStoreConfigDto.appearance };
     }
 
-    // Final save: explicitly create a new object to force TypeORM to detect changes in JSONB
-    return this.configRepository.save(this.configRepository.create(config));
+    // Use raw SQL to 100% guarantee JSONB columns are written correctly,
+    // bypassing all TypeORM entity tracking and serialization issues.
+    await this.configRepository.query(
+      `UPDATE store_config SET
+        identity  = $1::jsonb,
+        checkout  = $2::jsonb,
+        content   = $3::jsonb,
+        seo       = $4::jsonb,
+        social    = $5::jsonb,
+        partners  = $6::jsonb,
+        features  = $7::jsonb,
+        appearance = $8::jsonb,
+        "updatedAt" = NOW()
+       WHERE id = 'default'`,
+      [
+        JSON.stringify(config.identity || {}),
+        JSON.stringify(config.checkout || {}),
+        JSON.stringify(config.content || {}),
+        JSON.stringify(config.seo || {}),
+        JSON.stringify(config.social || {}),
+        JSON.stringify(Array.isArray(config.partners) ? config.partners : []),
+        JSON.stringify(Array.isArray(config.features) ? config.features : []),
+        JSON.stringify(config.appearance || {}),
+      ]
+    );
+
+    // Read fresh from DB to return the true persisted state
+    return this.configRepository.findOne({ where: { id: 'default' } }).then(c => c!);
   }
 }
+  

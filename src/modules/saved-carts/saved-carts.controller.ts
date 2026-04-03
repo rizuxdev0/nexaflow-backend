@@ -6,7 +6,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Public } from '../../common/decorators/public.decorator';
 
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 
 @ApiTags('saved-carts')
 @ApiBearerAuth()
@@ -20,32 +20,49 @@ export class SavedCartsController {
     return this.cartsService.findAll(query);
   }
 
+  @Get('customer/:customerId')
+  @Public()
+  @ApiOperation({ summary: 'Get saved carts by customer ID' })
+  @ApiParam({ name: 'customerId', description: 'Customer ID' })
+  @ApiResponse({ status: 200, description: 'List of saved carts for customer' })
+  findByCustomer(@Param('customerId') customerId: string) {
+    return this.cartsService.findByCustomer(customerId);
+  }
+
+  @Delete('customer/:customerId')
+  @Public()
+  @ApiOperation({ summary: 'Delete all saved carts for a customer' })
+  @ApiParam({ name: 'customerId', description: 'Customer ID' })
+  removeByCustomer(@Param('customerId') customerId: string) {
+    return this.cartsService.removeByCustomer(customerId);
+  }
+
   @Get(':id')
-  @Public() // Allow customer to see their cart link without login (if link shared)
+  @Public()
   findOne(@Param('id') id: string) {
     return this.cartsService.findOne(id);
   }
 
   @Post()
-  @Public() // Allow anyone to save a cart
+  @Public()
   create(@Body() dto: CreateSavedCartDto) {
     return this.cartsService.create(dto);
   }
 
   @Put(':id')
-  @Public() // Updates allowed if the client has the ID
+  @Public()
   update(@Param('id') id: string, @Body() dto: Partial<CreateSavedCartDto>) {
     return this.cartsService.update(id, dto);
   }
 
   @Delete(':id')
-  @Public() // Deletion allowed via ID (e.g. after successful order)
+  @Public()
   remove(@Param('id') id: string) {
     return this.cartsService.remove(id);
   }
 
   @Post('cleanup')
-  @Public() // Can be called by CRON
+  @Public()
   cleanup() {
     return this.cartsService.cleanup();
   }
