@@ -18,6 +18,17 @@ export class StoreConfigService {
   }
 
   async get(): Promise<StoreConfig> {
+    const defaultPasswordPolicy = {
+      minLength: 8,
+      maxLength: 128,
+      requireUppercase: true,
+      requireLowercase: true,
+      requireNumbers: true,
+      requireSpecialChars: false,
+      preventCommonPasswords: true,
+      expirationDays: 0,
+    };
+
     const defaultFeatures = [
       { id: 'deferred_payments', label: 'Paiements différés', description: 'Permettre aux clients de payer en plusieurs fois avec échéancier', enabled: true, category: 'finance', icon: 'Building2' },
       { id: 'custom_packs', label: 'Packs personnalisés', description: 'Les clients peuvent créer des packs produits avec remise automatique', enabled: true, category: 'commerce', icon: 'Sparkles' },
@@ -76,23 +87,77 @@ export class StoreConfigService {
         partners: [],
         features: defaultFeatures,
         appearance: { theme: 'blue', darkMode: false, language: 'fr' },
-        security: { jwtExpiresIn: '24h', idleTimeoutMinutes: 30, autoLockEnabled: true }
+        security: { 
+          jwtExpiresIn: '24h', 
+          idleTimeoutMinutes: 30, 
+          autoLockEnabled: true,
+          passwordPolicy: defaultPasswordPolicy
+        }
       });
       return this.configRepository.save(config);
     }
 
-    // Upgrade logic: ensure all required fields exist
+    // Upgrade & Integrity logic: ensure all required fields exist
     let changed = false;
-    if (!config.features || config.features.length < defaultFeatures.length) {
-      const existingIds = new Set((config.features || []).map(f => f.id));
-      const missing = defaultFeatures.filter(f => !existingIds.has(f.id));
+    
+    // 1. Ensure count and basic structure
+    if (!config.features || !Array.isArray(config.features)) {
+      config.features = defaultFeatures;
+      changed = true;
+    } else {
+      // 2. Clear duplicates (MANDATORY FIX)
+      const uniqueFeatures: any[] = [];
+      const seenIds = new Set();
+      
+      // We iterate to find real duplicates
+      for (const f of config.features) {
+        if (!f || !f.id) {
+          changed = true; // Malformed item
+          continue;
+        }
+        if (!seenIds.has(f.id)) {
+          uniqueFeatures.push(f);
+          seenIds.add(f.id);
+        } else {
+          changed = true; // Duplicate ID found
+        }
+      }
+
+      // 3. Deep Integrity Check: restore metadata for all 15 features
+      const correctedFeatures: any[] = uniqueFeatures.map(f => {
+        const def = defaultFeatures.find(d => d.id === f.id);
+        if (def) {
+          // Check if any critical field is missing
+          const isMissingData = !f.label || !f.category || !f.icon || !f.description;
+          if (isMissingData) {
+            changed = true;
+            return { ...def, enabled: !!f.enabled };
+          }
+        }
+        return f;
+      });
+
+      // 4. Missing Features Check
+      const finalIds = new Set(correctedFeatures.map(f => f.id));
+      const missing = defaultFeatures.filter(f => !finalIds.has(f.id));
+      
       if (missing.length > 0) {
-        config.features = [...(config.features || []), ...missing];
+        config.features = [...correctedFeatures, ...missing];
+        changed = true;
+      } else if (changed || correctedFeatures.length !== config.features.length) {
+        config.features = correctedFeatures;
         changed = true;
       }
     }
     if (config.identity && !config.identity.socialLinks) {
       config.identity = { ...config.identity, socialLinks: { facebook: '', instagram: '', whatsapp: '', twitter: '', tiktok: '' } };
+      changed = true;
+    }
+
+    // 5. Sanitize Partners
+    const sanitizedPartners = this.sanitizePartners(config.partners || []);
+    if (sanitizedPartners.length !== (config.partners || []).length) {
+      config.partners = sanitizedPartners;
       changed = true;
     }
     
@@ -112,7 +177,15 @@ export class StoreConfigService {
     }
 
     if (!config.security) {
-      config.security = { jwtExpiresIn: '24h', idleTimeoutMinutes: 30, autoLockEnabled: true };
+      config.security = { 
+        jwtExpiresIn: '24h', 
+        idleTimeoutMinutes: 30, 
+        autoLockEnabled: true,
+        passwordPolicy: defaultPasswordPolicy
+      };
+      changed = true;
+    } else if (!config.security.passwordPolicy) {
+      config.security.passwordPolicy = defaultPasswordPolicy;
       changed = true;
     }
 
@@ -136,10 +209,35 @@ export class StoreConfigService {
       config.content = { ...config.content, ...updateStoreConfigDto.content };
     }
     if (updateStoreConfigDto.partners !== undefined) {
-      config.partners = updateStoreConfigDto.partners;
+      config.partners = this.sanitizePartners(updateStoreConfigDto.partners);
     }
     if (updateStoreConfigDto.features) {
-      config.features = updateStoreConfigDto.features;
+      const defaultFeatures = [
+        { id: 'deferred_payments', label: 'Paiements différés', description: 'Permettre aux clients de payer en plusieurs fois avec échéancier', enabled: true, category: 'finance', icon: 'Building2' },
+        { id: 'custom_packs', label: 'Packs personnalisés', description: 'Les clients peuvent créer des packs produits avec remise automatique', enabled: true, category: 'commerce', icon: 'Sparkles' },
+        { id: 'promotions', label: 'Promotions & codes promo', description: 'Gérer des promotions, codes de réduction et offres spéciales', enabled: true, category: 'marketing', icon: 'Tag' },
+        { id: 'loyalty', label: 'Programme de fidélité', description: 'Récompenser les clients fidèles avec des points et avantages', enabled: true, category: 'customer', icon: 'Crown' },
+        { id: 'wishlist', label: 'Liste de souhaits', description: 'Permettre aux clients de sauvegarder des produits favoris', enabled: true, category: 'customer', icon: 'Heart' },
+        { id: 'delivery', label: 'Gestion des livraisons', description: 'Zones de livraison, frais calculés et suivi des expéditions', enabled: true, category: 'logistics', icon: 'Truck' },
+        { id: 'invoices', label: 'Facturation', description: 'Génération et gestion des factures clients', enabled: true, category: 'finance', icon: 'Receipt' },
+        { id: 'currencies', label: 'Multi-devises', description: 'Gérer plusieurs devises et taux de change', enabled: true, category: 'finance', icon: 'Coins' },
+        { id: 'banners', label: 'Bannières publicitaires', description: 'Gérer les bannières et visuels promotionnels', enabled: true, category: 'marketing', icon: 'Image' },
+        { id: 'product_compare', label: 'Comparaison de produits', description: 'Permettre aux clients de comparer des produits côte à côte', enabled: true, category: 'customer', icon: 'ArrowLeftRight' },
+        { id: 'reviews', label: 'Avis clients', description: 'Permettre aux clients de noter et commenter les produits', enabled: true, category: 'customer', icon: 'Star' },
+        { id: 'saved_carts', label: 'Paniers sauvegardés', description: 'Sauvegarder des paniers pour les clients récurrents', enabled: true, category: 'commerce', icon: 'ShoppingBag' },
+        { id: 'marketplace', label: 'Marketplace', description: 'Activer les outils de place de marché multi-vendeurs', enabled: false, category: 'commerce', icon: 'Building2' },
+        { id: 'subscriptions', label: 'Abonnements', description: 'Vendre des abonnements et paiements récurrents', enabled: false, category: 'finance', icon: 'Receipt' },
+        { id: 'b2b_portal', label: 'Portail B2B', description: 'Interface de vente en gros avec prix sur mesure', enabled: false, category: 'commerce', icon: 'Building' }
+      ];
+
+      // Robust merge: prioritize static data from defaults, take 'enabled' from DTO
+      config.features = updateStoreConfigDto.features.map(f => {
+        const def = defaultFeatures.find(d => d.id === f.id);
+        if (def) {
+          return { ...def, enabled: !!f.enabled };
+        }
+        return f; // Keep as is if not in defaults (shouldn't happen)
+      });
     }
     if (updateStoreConfigDto.appearance) {
       config.appearance = { ...config.appearance, ...updateStoreConfigDto.appearance };
@@ -148,8 +246,18 @@ export class StoreConfigService {
       config.security = { ...config.security, ...updateStoreConfigDto.security };
     }
 
-    // Setting the WHOLE object/array ensures TypeORM detects the change on JSONB columns
-    return this.configRepository.save(config);
+    // 👈 FORCED SYNC: Use a more direct update method to avoid TypeORM JSONB save issues
+    await this.configRepository.update('default', {
+      identity: config.identity,
+      checkout: config.checkout,
+      content: config.content,
+      partners: config.partners,
+      features: config.features,
+      appearance: config.appearance,
+      security: config.security
+    });
+
+    return config;
   }
 }
   
