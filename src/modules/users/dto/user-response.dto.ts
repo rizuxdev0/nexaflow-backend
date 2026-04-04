@@ -33,6 +33,12 @@ export class UserResponseDto {
   @ApiPropertyOptional()
   avatar?: string;
 
+  @ApiPropertyOptional()
+  address?: string;
+
+  @ApiPropertyOptional()
+  city?: string;
+
   @ApiProperty()
   isActive: boolean;
 

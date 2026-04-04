@@ -61,7 +61,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { VendorRequestsModule } from './modules/vendor-requests/vendor-requests.module';
-
+import { DeliveriesModule } from './modules/deliveries/deliveries.module';
 
 
 
@@ -137,6 +137,7 @@ import { VendorRequestsModule } from './modules/vendor-requests/vendor-requests.
     UploadModule,
     WishlistModule,
     VendorRequestsModule,
+    DeliveriesModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',

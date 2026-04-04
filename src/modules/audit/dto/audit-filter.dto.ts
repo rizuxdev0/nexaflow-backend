@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsUUID, IsDateString } from 'class-validator';
+import { IsEnum, IsOptional, IsUUID, IsDateString, IsInt, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
 import { AuditAction } from '../entities/audit-log.entity';
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 
@@ -8,6 +9,14 @@ export class AuditFilterDto extends PaginationDto {
   @IsEnum(AuditAction)
   @IsOptional()
   action?: AuditAction;
+
+  @ApiPropertyOptional({ description: 'Allowed to exceed standard pagination limit for CSV exports.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  // @Max(50000)
+  pageSize?: number = 20;
 
   @ApiPropertyOptional()
   @IsOptional()

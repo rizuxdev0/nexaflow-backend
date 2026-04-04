@@ -67,11 +67,11 @@ export class Order {
   @Column({ nullable: true, type: 'text' })
   notes: string;
 
-  @ManyToOne(() => User, (user) => user.orders)
+  @ManyToOne(() => User, (user) => user.orders, { nullable: true })
   @JoinColumn({ name: 'userId' })
   user: User;
 
-  @Column()
+  @Column({ nullable: true })
   userId: string;
 
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true })

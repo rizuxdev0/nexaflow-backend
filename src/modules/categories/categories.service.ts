@@ -93,7 +93,7 @@ export class CategoriesService {
     // Ajouter le compteur de produits
     const dataWithCounts = await Promise.all(
       data.map(async (category) => {
-        const productsCount = await this.categoriesRepository
+        const result = await this.categoriesRepository
           .createQueryBuilder('category')
           .leftJoin('category.products', 'products')
           .where('category.id = :id', { id: category.id })
@@ -102,7 +102,7 @@ export class CategoriesService {
 
         return {
           ...category,
-          productsCount: parseInt(productsCount.count) || 0,
+          productCount: parseInt(result.count) || 0,
         };
       }),
     );
@@ -192,16 +192,19 @@ export class CategoriesService {
   async remove(id: string): Promise<void> {
     const category = await this.findOne(id);
 
-    // Vérifier si la catégorie a des produits
-    const productsCount = await this.categoriesRepository
+    // Vérifier si la catégorie a des produits (réellement)
+    const result = await this.categoriesRepository
       .createQueryBuilder('category')
-      .leftJoin('category.products', 'products')
+      .innerJoin('category.products', 'products')
       .where('category.id = :id', { id })
-      .getCount();
+      .select('COUNT(products.id)', 'count')
+      .getRawOne();
 
-    if (productsCount > 0) {
+    const actualProductsCount = parseInt(result.count) || 0;
+
+    if (actualProductsCount > 0) {
       throw new BadRequestException(
-        `Impossible de supprimer la catégorie car elle contient ${productsCount} produit(s)`,
+        `Impossible de supprimer la catégorie car elle contient ${actualProductsCount} produit(s)`,
       );
     }
 

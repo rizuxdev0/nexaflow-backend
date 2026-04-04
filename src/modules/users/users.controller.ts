@@ -125,6 +125,19 @@ export class UsersController {
     return this.usersService['removeSensitiveData'](user);
   }
 
+  @Put('profile')
+  @ApiOperation({ summary: "Mettre à jour son propre profil" })
+  @ApiResponse({ status: 200, description: 'Profil mis à jour' })
+  async updateOwnProfile(
+    @CurrentUser('id') userId: string,
+    @Body() updateUserDto: UpdateUserDto,
+  ): Promise<UserResponseDto> {
+    const allowedUpdates = { ...updateUserDto };
+    delete allowedUpdates.roleId;
+    delete allowedUpdates.isActive;
+    return this.usersService.update(userId, allowedUpdates);
+  }
+
   @Put(':id')
   @Roles('super_admin', 'admin')
   @Permissions('users.update')

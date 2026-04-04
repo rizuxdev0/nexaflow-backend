@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsEnum, IsUUID, IsArray, IsDateString, IsBoolean, Min, Max } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsEnum, IsArray, IsDate, IsBoolean, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { PromoType } from '../entities/promo.entity';
 
 export class CreatePromoDto {
@@ -34,11 +35,13 @@ export class CreatePromoDto {
   @Min(0)
   usageLimit?: number;
 
-  @IsDateString()
+  @IsDate()
+  @Type(() => Date)
   @IsNotEmpty()
   startDate: Date;
 
-  @IsDateString()
+  @IsDate()
+  @Type(() => Date)
   @IsNotEmpty()
   endDate: Date;
 

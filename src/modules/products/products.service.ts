@@ -357,7 +357,10 @@ export class ProductsService {
       });
     } catch (error) {
       // Si violation de clé étrangère (ex: lié aux commandes ou mouvements de stock)
-      if (error.message && (error.message.includes('foreign key constraint') || error.message.includes('clé étrangère'))) {
+      if (error.message && (error.message.includes('foreign key constraint') || error.message.includes('clé étrangère') || error.message.includes('violates foreign'))) {
+        if (!product.isActive) {
+           throw new BadRequestException("Impossible de supprimer définitivement ce produit car il est lié à l'historique des ventes ou des mouvements de stock. Il restera archivé.");
+        }
         product.isActive = false;
         product.sku = `${product.sku || 'DEL'}-${Date.now().toString().slice(-6)}`;
         product.slug = `${product.slug}-${Date.now()}`;

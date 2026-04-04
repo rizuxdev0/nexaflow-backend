@@ -229,7 +229,7 @@ export class OrdersService {
     createPosOrderDto: CreatePosOrderDto,
     user: any,
   ): Promise<PosOrderResponseDto> {
-    const userId = user?.id || 'system';
+    const userId = user?.id || null;
     const userName = user?.name || 'Utilisateur';
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -420,7 +420,7 @@ export class OrdersService {
   }
 
   async create(createOrderDto: CreateOrderDto, user: any): Promise<Order> {
-    const userId = user?.id || 'system';
+    const userId = user?.id || null;
     const userName = (user?.firstName && user?.lastName) ? `${user.firstName} ${user.lastName}` : (user?.name || 'Client');
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -686,6 +686,29 @@ export class OrdersService {
       order: { createdAt: 'DESC' },
       take: limit,
     });
+  }
+
+  async trackOrder(orderNumber: string, emailOrPhone: string): Promise<Order> {
+    const qb = this.ordersRepository.createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'items')
+      .leftJoinAndSelect('o.items.product', 'product')
+      .where('o.orderNumber = :orderNumber', { orderNumber });
+      
+    const order = await qb.getOne();
+
+    if (!order) {
+      throw new NotFoundException(`Commande introuvable`);
+    }
+
+    // Security check: matching email or phone
+    const hasMatch = (order.customerEmail && order.customerEmail.toLowerCase() === emailOrPhone.toLowerCase()) || 
+                     (order.customerPhone && order.customerPhone === emailOrPhone);
+                     
+    if (!hasMatch) {
+      throw new BadRequestException('Les informations de contact ne correspondent pas à cette commande');
+    }
+
+    return order;
   }
 
   private async generateOrderNumber(prefix: string = 'CMD'): Promise<string> {

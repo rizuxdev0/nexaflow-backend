@@ -8,6 +8,7 @@ import {
   HttpStatus,
   HttpCode,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -53,6 +54,16 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.create(createOrderDto, user);
+  }
+
+  @Public()
+  @Post('track')
+  @ApiOperation({ summary: 'Suivre une commande publique' })
+  trackOrder(@Body() body: { orderNumber: string; emailOrPhone: string }) {
+    if (!body.orderNumber || !body.emailOrPhone) {
+      throw new BadRequestException('Veuillez fournir le numéro de commande et l\'email/téléphone');
+    }
+    return this.ordersService.trackOrder(body.orderNumber, body.emailOrPhone);
   }
 
   @Get()

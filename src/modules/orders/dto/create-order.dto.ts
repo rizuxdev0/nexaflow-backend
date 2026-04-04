@@ -40,9 +40,33 @@ class OrderItemDto {
   sku?: string;
 
   @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  id?: string;
+
+  @ApiPropertyOptional()
   @IsNumber()
+  @Type(() => Number)
   @IsOptional()
   unitPrice?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  discount?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  taxRate?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @Type(() => Number)
+  @IsOptional()
+  total?: number;
 }
 
 export class CreateOrderDto {

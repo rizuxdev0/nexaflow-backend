@@ -201,4 +201,9 @@ export class CreateProductDto {
   @IsBoolean()
   @IsOptional()
   isFeatured?: boolean;
+
+  @ApiPropertyOptional({ description: 'Produit actif', default: true })
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
 }

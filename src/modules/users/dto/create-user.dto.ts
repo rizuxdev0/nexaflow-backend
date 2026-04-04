@@ -48,6 +48,16 @@ export class CreateUserDto {
   @IsOptional()
   phone?: string;
 
+  @ApiPropertyOptional({ description: 'Adresse postale', example: '123 Avenue React' })
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @ApiPropertyOptional({ description: 'Ville', example: 'Lomé' })
+  @IsString()
+  @IsOptional()
+  city?: string;
+
   @ApiProperty({ description: 'ID du rôle', example: 'uuid-du-role' })
   @IsUUID()
   @IsNotEmpty()

@@ -55,18 +55,19 @@ export class AuditService {
     }
 
     if (resource) {
-      queryBuilder.andWhere('audit.resource = :resource', { resource });
+      queryBuilder.andWhere('audit.resource ILIKE :resource', { resource: `%${resource}%` });
     }
 
     if (userId) {
       queryBuilder.andWhere('audit.userId = :userId', { userId });
     }
 
-    if (startDate && endDate) {
-      queryBuilder.andWhere('audit.timestamp BETWEEN :startDate AND :endDate', {
-        startDate,
-        endDate,
-      });
+    if (startDate) {
+      queryBuilder.andWhere('audit.timestamp >= :startDate', { startDate });
+    }
+
+    if (endDate) {
+      queryBuilder.andWhere('audit.timestamp <= :endDate', { endDate });
     }
 
     const [data, total] = await queryBuilder

@@ -72,7 +72,7 @@ export class ProductsController {
       filterDto.search,
       filterDto.categoryId,
       filterDto.supplierId,
-      undefined, // isActive
+      filterDto.isActive,
       filterDto.isFeatured,
       filterDto.minPrice,
       filterDto.maxPrice,

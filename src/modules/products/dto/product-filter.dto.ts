@@ -36,4 +36,12 @@ export class ProductFilterDto extends PaginationDto {
   })
   @IsBoolean()
   isFeatured?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    return value === 'true' || value === true || value === 1 || value === '1';
+  })
+  @IsBoolean()
+  isActive?: boolean;
 }
