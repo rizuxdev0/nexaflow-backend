@@ -47,7 +47,7 @@ export class DeferredPaymentsController {
     return this.deferredPaymentsService.recordPayment(id, entryDto);
   }
 
-  @Post('overdue')
+  @Post('check-overdue')
   @Roles('admin', 'manager')
   processOverdue(@Body() actionDto: OverdueActionDto) {
     return this.deferredPaymentsService.processOverdue(actionDto);

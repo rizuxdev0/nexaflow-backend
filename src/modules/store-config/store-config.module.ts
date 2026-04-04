@@ -7,6 +7,7 @@ import { StoreConfig } from './entities/store-config.entity';
 @Module({
   imports: [TypeOrmModule.forFeature([StoreConfig])],
   controllers: [StoreConfigController],
-  providers: [StoreConfigService]
+  providers: [StoreConfigService],
+  exports: [StoreConfigService]
 })
 export class StoreConfigModule {}

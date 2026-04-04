@@ -16,6 +16,7 @@ import {
   PaginatedResponse,
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UsersService {
@@ -24,6 +25,7 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
+    private configService: ConfigService,
   ) {}
 
   // ============ CRUD PRINCIPAL ============
@@ -85,13 +87,15 @@ export class UsersService {
       );
     }
 
-    // Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
-
     const userData = {
       ...createUserDto,
-      password: hashedPassword,
     };
+
+    // Hasher le mot de passe s'il n'est pas déjà hashé
+    if (userData.password && !userData.password.startsWith('$2')) {
+      const rounds = Number(this.configService.get('BCRYPT_ROUNDS', 12));
+      userData.password = await bcrypt.hash(userData.password, rounds);
+    }
 
     const user = this.usersRepository.create(userData);
     return await this.usersRepository.save(user);
@@ -213,8 +217,9 @@ export class UsersService {
     }
 
     // Si le mot de passe est fourni, le hasher
-    if (updateUserDto.password) {
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 12);
+    if (updateUserDto.password && !updateUserDto.password.startsWith('$2')) {
+      const rounds = Number(this.configService.get('BCRYPT_ROUNDS', 12));
+      updateUserDto.password = await bcrypt.hash(updateUserDto.password, rounds);
     }
 
     Object.assign(user, updateUserDto);

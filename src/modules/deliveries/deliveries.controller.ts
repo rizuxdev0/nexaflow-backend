@@ -12,7 +12,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagg
 
 @ApiTags('deliveries')
 @ApiBearerAuth()
-@Controller('deliveries')
+@Controller('delivery')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class DeliveriesController {
   constructor(private readonly deliveriesService: DeliveriesService) {}

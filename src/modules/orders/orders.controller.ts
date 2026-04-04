@@ -7,6 +7,7 @@ import {
   Query,
   HttpStatus,
   HttpCode,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,10 +19,12 @@ import {
 } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CreatePosOrderDto } from '../products/dto/create-pos-order.dto';
+import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderFilterDto } from './dto/order-filter.dto';
 import { Order } from './entities/order.entity';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('orders')
 @Controller('orders')
@@ -38,6 +41,18 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.createPosOrder(createPosOrderDto, user);
+  }
+
+  @Public()
+  @Post()
+  @ApiOperation({ summary: 'Créer une commande (Ecommerce ou autre)' })
+  @ApiResponse({ status: 201, description: 'Commande créée avec succès' })
+  @HttpCode(HttpStatus.CREATED)
+  create(
+    @Body() createOrderDto: CreateOrderDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.create(createOrderDto, user);
   }
 
   @Get()
@@ -66,8 +81,6 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: 'Statistiques des commandes' })
   getStats(
     @Query() filterDto: OrderFilterDto,
-    @Query('dateFrom') dateFrom?: string,
-    @Query('dateTo') dateTo?: string,
   ) {
     return this.ordersService.getStats(
       filterDto.status,
@@ -75,8 +88,8 @@ export class OrdersController {
       filterDto.customerId,
       filterDto.userId,
       filterDto.search || filterDto.orderNumber,
-      dateFrom ? new Date(dateFrom) : undefined,
-      dateTo ? new Date(dateTo) : undefined,
+      filterDto.dateFrom ? new Date(filterDto.dateFrom) : undefined,
+      filterDto.dateTo ? new Date(filterDto.dateTo) : undefined,
     );
   }
 

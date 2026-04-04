@@ -11,6 +11,7 @@ import { PermissionsModule } from '../permissions/permissions.module';
 import { ProductsModule } from '../products/products.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
+import { StoreConfigModule } from '../store-config/store-config.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SuppliersModule } from '../suppliers/suppliers.module';
     ProductsModule,
     CategoriesModule,
     SuppliersModule,
+    StoreConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

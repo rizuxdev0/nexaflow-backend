@@ -34,6 +34,8 @@ import { AuditModule } from './modules/audit/audit.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { StoreConfigModule } from './modules/store-config/store-config.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { ReturnPolicyModule } from './modules/return-policy/return-policy.module';
 import { BannersModule } from './modules/banners/banners.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { PromosModule } from './modules/promos/promos.module';
@@ -53,9 +55,12 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { CashRegistersModule } from './modules/cash-registers/cash-registers.module';
 import { ExpensesModule } from './modules/expenses/expenses.module';
+import { TestimonialsModule } from './modules/testimonials/testimonials.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
+import { WishlistModule } from './modules/wishlist/wishlist.module';
+import { VendorRequestsModule } from './modules/vendor-requests/vendor-requests.module';
 
 
 
@@ -108,6 +113,8 @@ import { join } from 'path';
     ExpensesModule,
     WebhooksModule,
     StoreConfigModule,
+    DashboardModule,
+    ReturnPolicyModule,
 
     BannersModule,
     LoyaltyModule,
@@ -126,7 +133,10 @@ import { join } from 'path';
     ReportsModule,
     NotificationsModule,
     CashRegistersModule,
+    TestimonialsModule,
     UploadModule,
+    WishlistModule,
+    VendorRequestsModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',

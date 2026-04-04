@@ -22,11 +22,11 @@ import {
   PaymentMethod,
 } from '../products/dto/create-pos-order.dto';
 import { PosOrderResponseDto } from '../products/dto/pos-order-response.dto';
+import { CreateOrderDto } from './dto/create-order.dto';
 import {
   PaginatedResponse,
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
-import { FindOptionsWhere, Like } from 'typeorm';
 import { StockService } from '../stock/stock.service';
 import { StockMovementType } from '../stock/entities/stock-movement.entity';
 
@@ -307,20 +307,21 @@ export class OrdersService {
       const order = this.ordersRepository.create({
         orderNumber,
         subtotal,
-        discountTotal: discountAmount, // ← Utiliser discountTotal (nom de la colonne dans l'entité)
+        discountTotal: discountAmount,
         taxTotal: taxAmount,
         total,
-        status: OrderStatus.COMPLETED,
-        paymentStatus: PaymentStatus.PAID,
+        status: (createPosOrderDto.status as OrderStatus) || OrderStatus.COMPLETED,
+        paymentStatus: (createPosOrderDto.paymentStatus as PaymentStatus) || PaymentStatus.PAID,
         paymentMethod: createPosOrderDto.paymentMethod,
         sessionId: createPosOrderDto.sessionId,
-        userId, // ← Correspond à votre entité Order qui a userId
+        userId,
         customerId: createPosOrderDto.customerId,
         notes: createPosOrderDto.notes,
         orderDate: new Date(),
-      });
+      }) as Order;
 
       const savedOrder = await queryRunner.manager.save(order);
+      const savedItems: any[] = [];
 
       // 8. Créer les items et décrémenter le stock
       for (const item of items) {
@@ -336,11 +337,11 @@ export class OrdersService {
           taxRate,
           taxAmount: Math.round(item.unitPrice * item.quantity * taxRate),
         });
-        await queryRunner.manager.save(orderItem);
+        const savedItem = await queryRunner.manager.save(orderItem);
+        savedItems.push(savedItem);
 
         // Décrémenter le stock et créer un mouvement
         if (item.variant) {
-          // Note: On utilise le StockService pour s'assurer que les mouvements sont loggés
           await this.stockService.createMovement({
             productId: item.productId,
             type: StockMovementType.OUT,
@@ -349,8 +350,6 @@ export class OrdersService {
             reference: savedOrder.id,
             userId: userId,
           });
-          // Note: Le service de stock s'occupe de décrémenter le produit, mais peut-être pas la variante si elle est séparée.
-          // Ici on doit s'assurer que si c'est une variante, son stock est aussi mis à jour.
           item.variant.stock -= item.quantity;
           await queryRunner.manager.save(item.variant);
         } else {
@@ -404,18 +403,13 @@ export class OrdersService {
       await queryRunner.commitTransaction();
 
       return {
-        id: savedOrder.id,
-        orderNumber: savedOrder.orderNumber,
-        subtotal,
+        ...savedOrder,
+        items: savedItems,
         discountAmount,
         afterDiscount,
         taxAmount,
-        total,
-        paymentMethod: createPosOrderDto.paymentMethod,
         tenderedAmount: createPosOrderDto.tenderedAmount,
         change,
-        status: savedOrder.status,
-        createdAt: savedOrder.createdAt,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -424,6 +418,99 @@ export class OrdersService {
       await queryRunner.release();
     }
   }
+
+  async create(createOrderDto: CreateOrderDto, user: any): Promise<Order> {
+    const userId = user?.id || 'system';
+    const userName = (user?.firstName && user?.lastName) ? `${user.firstName} ${user.lastName}` : (user?.name || 'Client');
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Calculate totals from DB unless explicitly provided (we still verify items exist)
+      const { items, subtotal: calculatedSubtotal } = await this.calculateItemsSubtotal(
+        createOrderDto.items,
+      );
+
+      // Use the calculated total if not provided
+      const subtotal = createOrderDto.subtotal || calculatedSubtotal;
+      const taxRate = 0.18; // Default
+      const taxTotal = createOrderDto.taxTotal || Math.round(subtotal * taxRate);
+      const discountTotal = createOrderDto.discountTotal || 0;
+      const total = createOrderDto.total || (subtotal + taxTotal - discountTotal);
+
+      // 2. Generate order number
+      const prefix = createOrderDto.source === 'ecommerce' ? 'WEB' : 'CMD';
+      const orderNumber = await this.generateOrderNumber(prefix);
+
+      // 3. Create the order
+      const order = this.ordersRepository.create({
+        orderNumber,
+        subtotal,
+        discountTotal,
+        taxTotal,
+        total,
+        status: (createOrderDto.status as OrderStatus) || OrderStatus.PENDING,
+        paymentStatus: (createOrderDto.paymentStatus as PaymentStatus) || PaymentStatus.PENDING,
+        paymentMethod: (createOrderDto.paymentMethod as any) || 'bank_transfer',
+        userId: user?.role === 'customer' ? null : userId,
+        customerId: createOrderDto.customerId || (user?.role === 'customer' ? user.id : null),
+        customerName: createOrderDto.customerName || userName,
+        customerEmail: createOrderDto.customerEmail || user?.email,
+        shippingAddress: createOrderDto.shippingAddress,
+        notes: createOrderDto.notes,
+        orderDate: new Date(),
+      }) as Order;
+
+      const savedOrder = await queryRunner.manager.save(order);
+
+      // 4. Create items and handle stock
+      for (const item of items) {
+        const orderItem = this.orderItemsRepository.create({
+          orderId: savedOrder.id,
+          productId: item.productId,
+          variantId: item.variantId,
+          productName: item.product.name,
+          productSku: item.variant?.sku || item.product.sku,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.unitPrice * item.quantity,
+          taxRate,
+          taxAmount: Math.round(item.unitPrice * item.quantity * taxRate),
+        });
+        await queryRunner.manager.save(orderItem);
+
+        // Update stock movement
+        await this.stockService.createMovement({
+          productId: item.productId,
+          type: StockMovementType.OUT,
+          quantity: item.quantity,
+          reason: `Commande ${createOrderDto.source || ''} #${orderNumber}`,
+          reference: savedOrder.id,
+          userId: userId,
+        });
+      }
+
+      // 5. Audit log
+      await this.auditService.log({
+        userId,
+        userName,
+        action: AuditAction.SALE,
+        resource: 'Order',
+        resourceId: savedOrder.id,
+        details: `Nouvelle commande ${createOrderDto.source || ''} #${orderNumber} - Total: ${total} FCFA`,
+        newData: savedOrder,
+      });
+
+      await queryRunner.commitTransaction();
+      return this.findOne(savedOrder.id);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+    }
+  }
+
   private async calculateItemsSubtotal(
     items: { productId: string; quantity: number; variantId?: string }[],
   ) {
@@ -546,20 +633,20 @@ export class OrdersService {
   ) {
     const qb = this.ordersRepository.createQueryBuilder('o');
 
-    if (status) qb.andWhere('o.status = :status', { status });
-    if (paymentStatus) qb.andWhere('o.paymentStatus = :paymentStatus', { paymentStatus });
+    if (status && (status as any) !== 'all') qb.andWhere('o.status = :status', { status });
+    if (paymentStatus && (paymentStatus as any) !== 'all') qb.andWhere('o.paymentStatus = :paymentStatus', { paymentStatus });
     if (customerId) qb.andWhere('o.customerId = :customerId', { customerId });
     if (userId) qb.andWhere('o.userId = :userId', { userId });
     if (search) {
-      qb.andWhere('o.orderNumber LIKE :search', { search: `%${search}%` });
+      qb.andWhere('(o.orderNumber LIKE :search OR o.customerName LIKE :search)', { search: `%${search}%` });
     }
     if (dateFrom) qb.andWhere('o.createdAt >= :dateFrom', { dateFrom });
     if (dateTo) qb.andWhere('o.createdAt <= :dateTo', { dateTo });
 
-    const totalOrders = await qb.getCount();
+    const totalOrders = await qb.clone().getCount();
 
-    // Sum totals, note that SUM returns a string so we parse it
-    const sumResult = await qb.select('SUM(o.total)', 'revenue').getRawOne();
+    // Sum totals using a clone to preserve WHERE conditions
+    const sumResult = await qb.clone().select('SUM(o.total)', 'revenue').getRawOne();
     const totalRevenue = parseFloat(sumResult?.revenue || '0');
 
     // Count pending

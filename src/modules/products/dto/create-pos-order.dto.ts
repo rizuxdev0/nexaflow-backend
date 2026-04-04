@@ -17,6 +17,7 @@ export enum PaymentMethod {
   MOBILE_MONEY = 'mobile_money',
   BANK_TRANSFER = 'bank_transfer',
   MIXED = 'mixed',
+  DEFERRED = 'deferred',
 }
 
 export enum DiscountType {
@@ -84,4 +85,14 @@ export class CreatePosOrderDto {
   @IsUUID()
   @IsOptional()
   customerId?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  paymentStatus?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  status?: string;
 }

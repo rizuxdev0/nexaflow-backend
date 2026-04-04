@@ -36,4 +36,13 @@ export class PosOrderResponseDto {
 
   @ApiProperty()
   createdAt: Date;
+
+  @ApiProperty({ type: [Object] })
+  items: any[];
+
+  @ApiPropertyOptional()
+  discountValue?: number;
+
+  @ApiPropertyOptional()
+  discountType?: string;
 }

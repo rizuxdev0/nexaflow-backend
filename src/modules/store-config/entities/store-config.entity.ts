@@ -29,6 +29,9 @@ export class StoreConfig {
   @Column({ type: 'jsonb', default: {} })
   appearance: any;
 
+  @Column({ type: 'jsonb', default: { jwtExpiresIn: '24h', idleTimeoutMinutes: 30, autoLockEnabled: true } })
+  security: any;
+
 
   @UpdateDateColumn()
   updatedAt: Date;

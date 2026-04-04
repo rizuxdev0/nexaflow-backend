@@ -24,6 +24,7 @@ import { PermissionsService } from '../permissions/permissions.service';
 import { ProductsService } from '../products/products.service';
 import { CategoriesService } from '../categories/categories.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
+import { StoreConfigService } from '../store-config/store-config.service';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -36,6 +37,7 @@ export class AuthService implements OnModuleInit {
     private suppliersService: SuppliersService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private storeConfigService: StoreConfigService,
   ) {}
 
   async onModuleInit() {
@@ -55,16 +57,13 @@ export class AuthService implements OnModuleInit {
 
       if (!existingSuperAdmin) {
         const superAdminRole = await this.rolesService.findByName('super_admin');
-        const hashedPassword = await bcrypt.hash(
-          'super123',
-          this.configService.get('BCRYPT_ROUNDS', 12),
-        );
+        const defaultPassword = 'super123';
 
         await this.usersService.create({
           firstName: 'Ousmane',
           lastName: 'Ndiaye',
           email: superAdminEmail,
-          password: hashedPassword,
+          password: defaultPassword,
           roleId: superAdminRole.id,
           isActive: true,
           isEmailVerified: true,
@@ -158,11 +157,6 @@ export class AuthService implements OnModuleInit {
       throw new BadRequestException('Rôle client non configuré');
     }
 
-    // 3. Hasher le mot de passe
-    const hashedPassword = await bcrypt.hash(
-      registerDto.password,
-      this.configService.get('BCRYPT_ROUNDS', 12),
-    );
 
     // 4. Générer un token de vérification d'email
     const emailVerificationToken = uuidv4();
@@ -172,7 +166,7 @@ export class AuthService implements OnModuleInit {
       firstName: registerDto.firstName,
       lastName: registerDto.lastName,
       email: registerDto.email,
-      password: hashedPassword,
+      password: registerDto.password,
       phone: registerDto.phone,
       roleId: customerRole.id,
       isActive: true, // À mettre false si vérification email requise
@@ -182,8 +176,11 @@ export class AuthService implements OnModuleInit {
     // 6. TODO: Envoyer l'email de vérification
     // await this.emailService.sendVerificationEmail(user.email, emailVerificationToken);
 
-    // 7. Générer les tokens
-    return this.generateAuthResponse(user);
+    // 7. Générer les tokens (Reload with role needed for the response)
+    const userWithRole = await this.usersService.findById(user.id, {
+      withRoleAndPermissions: true,
+    });
+    return this.generateAuthResponse(userWithRole);
   }
 
   // ============ CONNEXION ============
@@ -217,6 +214,12 @@ export class AuthService implements OnModuleInit {
     // 3. Vérifier que le compte est actif
     if (!user.isActive) {
       throw new UnauthorizedException('Ce compte est désactivé');
+    }
+
+    // 3b. Restreindre l'accès selon la source
+    // Les clients ne peuvent pas se connecter à l'admin
+    if (loginDto.source === 'admin' && user.role?.name === 'customer') {
+      throw new UnauthorizedException('Accès refusé : Ce compte n\'est pas autorisé à accéder à l\'administration.');
     }
 
     // 4. Mettre à jour la dernière connexion
@@ -308,14 +311,9 @@ export class AuthService implements OnModuleInit {
       throw new BadRequestException('Token expiré');
     }
 
-    // Hasher le nouveau mot de passe
-    const hashedPassword = await bcrypt.hash(
-      newPassword,
-      this.configService.get('BCRYPT_ROUNDS', 12),
-    );
 
     // Mettre à jour le mot de passe et effacer le token
-    await this.usersService.updatePassword(user.id, hashedPassword);
+    await this.usersService.update(user.id, { password: newPassword });
     await this.usersService.clearResetPasswordToken(user.id);
 
     // Invalider tous les refresh tokens
@@ -340,14 +338,9 @@ export class AuthService implements OnModuleInit {
       throw new UnauthorizedException('Mot de passe actuel incorrect');
     }
 
-    // Hasher le nouveau mot de passe
-    const hashedPassword = await bcrypt.hash(
-      newPassword,
-      this.configService.get('BCRYPT_ROUNDS', 12),
-    );
 
     // Mettre à jour le mot de passe
-    await this.usersService.updatePassword(userId, hashedPassword);
+    await this.usersService.update(userId, { password: newPassword });
 
     // Invalider tous les refresh tokens (sauf la session courante ?)
     await this.usersService.clearRefreshToken(userId);
@@ -382,10 +375,14 @@ export class AuthService implements OnModuleInit {
       role: user.role?.name,
     };
 
+    // Récupérer la configuration de sécurité pour l'expiration du token
+    const storeConfig = await this.storeConfigService.get();
+    const jwtExpiresIn = storeConfig?.security?.jwtExpiresIn || this.configService.get('JWT_EXPIRES_IN', '24h');
+
     // Générer le JWT
     const token = this.jwtService.sign(payload, {
       secret: this.configService.get('JWT_SECRET'),
-      expiresIn: this.configService.get('JWT_EXPIRES_IN', '1h'),
+      expiresIn: jwtExpiresIn,
     });
 
     // Générer ou réutiliser le refresh token

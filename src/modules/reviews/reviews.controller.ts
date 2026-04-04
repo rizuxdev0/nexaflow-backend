@@ -28,7 +28,7 @@ export class ReviewsController {
   }
 
   @Public()
-  @Get('stats/:productId')
+  @Get('product/:productId/stats')
   getProductStats(@Param('productId') productId: string) {
     return this.reviewsService.getProductStats(productId);
   }

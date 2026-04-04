@@ -63,130 +63,61 @@ export class StoreConfigService {
           guestCheckoutEnabled: true,
           minimumOrderAmount: 0,
           paymentMethods: [
-            { id: 'cash', name: 'Espèces', enabled: true, icon: 'Banknote', description: 'Paiement à la livraison' },
-            { id: 'card', name: 'Carte bancaire', enabled: true, icon: 'CreditCard', description: 'Visa, Mastercard' },
-            { id: 'transfer', name: 'Virement bancaire', enabled: true, icon: 'Building', description: 'Transfert direct' },
-            { id: 'mobile', name: 'Mobile Money', enabled: true, icon: 'Smartphone', description: 'T-Money, Flooz, Wave' }
+            { id: 'mobile_money', name: 'Mobile Money', description: 'Paiement via TMoney ou Moov Money', enabled: true, instructions: 'Veuillez effectuer le transfert au numéro ci-dessous puis validez votre commande.', details: { number: '+228 90 00 00 00', owner: 'NexaFlow SARL' } },
+            { id: 'bank_transfer', name: 'Virement Bancaire', description: 'Virement sur notre compte bancaire', enabled: true, instructions: 'Veuillez effectuer le virement sur le compte suivant. Votre commande sera traitée après réception.', details: { bank: 'UTB Togo', iban: 'TG12 0000 0000 0000 0000 00', owner: 'NexaFlow SARL' } },
+            { id: 'cash', name: 'Paiement à la livraison', description: 'Payez en espèces lors de la réception', enabled: true, instructions: 'Veuillez préparer le montant exact pour faciliter la remise par le livreur.', details: {} }
           ],
-          tax: {
-            defaultTaxRate: 18,
-            taxLabel: 'TVA',
-            pricesIncludeTax: false,
-            taxId: ''
-          },
-          orderPrefix: 'NXF',
-          termsRequired: true,
-          notesEnabled: true
+          tax: { defaultTaxRate: 18, taxLabel: 'TVA', pricesIncludeTax: false, taxId: '' }
         },
         content: {
           welcomeTitle: 'Bienvenue sur NexaFlow',
-          welcomeSubtitle: 'Découvrez notre catalogue de produits exceptionnels',
-          sections: [
-            { id: 'hero', label: 'Bannière Hero', enabled: true },
-            { id: 'featured', label: 'Produits vedettes', enabled: true },
-            { id: 'categories', label: 'Catégories', enabled: true },
-            { id: 'best-sellers', label: 'Meilleures ventes', enabled: true }
-          ],
-          legalPages: [
-            { id: 'terms', title: 'Conditions Générales de Vente', content: '## CGV\n\nBienvenue...', enabled: true, updatedAt: new Date().toISOString() },
-            { id: 'privacy', title: 'Politique de Confidentialité', content: '## Confidentialité\n\nNous respectons...', enabled: true, updatedAt: new Date().toISOString() },
-            { id: 'legal', title: 'Mentions Légales', content: '## Mentions Légales\n\nRaison sociale...', enabled: true, updatedAt: new Date().toISOString() }
-          ],
-          footerText: '© 2026 NexaFlow Store. Tous droits réservés.',
-          announcementBar: {
-            enabled: true,
-            message: '🚚 Livraison gratuite à partir de 50 000 FCFA !'
-          }
+          announcementBar: { enabled: true, message: '🚚 Livraison gratuite!' }
         },
-        partners: [
-          { id: 'p1', name: 'Samsung', logoUrl: '', website: 'https://samsung.com', enabled: true },
-          { id: 'p2', name: 'Apple', logoUrl: '', website: 'https://apple.com', enabled: true }
-        ],
+        partners: [],
         features: defaultFeatures,
-        appearance: {
-          theme: 'blue',
-          darkMode: false,
-          language: 'fr'
-        }
+        appearance: { theme: 'blue', darkMode: false, language: 'fr' },
+        security: { jwtExpiresIn: '24h', idleTimeoutMinutes: 30, autoLockEnabled: true }
       });
-      await this.configRepository.save(config);
-    } else {
-      // Sanitize partners on read to auto-fix any corrupted data (e.g. [[], []])
-      if (Array.isArray(config.partners)) {
-        const clean = this.sanitizePartners(config.partners);
-        if (clean.length !== config.partners.length) {
-          config.partners = clean;
-        }
-      }
-      // Sync missing features into existing config (Upgrade logic)
-      let changed = false;
-      // Clean sync logic: Rebuild the features list based on ID to prevent duplicates and data corruption
-      const existingFeatures = Array.isArray(config.features) ? config.features : [];
-      const updatedFeatures = defaultFeatures.map(def => {
-        const existing = existingFeatures.find(f => f && f.id === def.id);
-        return existing ? { ...def, ...existing } : def;
-      });
+      return this.configRepository.save(config);
+    }
 
-      // If lengths differ or missing IDs, update the entry.
-      // Do a simple check instead of JSON.stringify to avoid key order issues
-      const needsUpdate = existingFeatures.length !== updatedFeatures.length || 
-                          updatedFeatures.some((uf, i) => !existingFeatures[i] || existingFeatures[i].id !== uf.id);
-      
-      if (needsUpdate) {
-        config.features = updatedFeatures;
+    // Upgrade logic: ensure all required fields exist
+    let changed = false;
+    if (!config.features || config.features.length < defaultFeatures.length) {
+      const existingIds = new Set((config.features || []).map(f => f.id));
+      const missing = defaultFeatures.filter(f => !existingIds.has(f.id));
+      if (missing.length > 0) {
+        config.features = [...(config.features || []), ...missing];
         changed = true;
       }
-      
-      // Ensure identity has socialLinks even in old configs
-      if (config.identity && !config.identity.socialLinks) {
-        config.identity.socialLinks = {
-          facebook: 'https://facebook.com',
-          instagram: 'https://instagram.com',
-          whatsapp: '+22890000000',
-          twitter: 'https://x.com',
-          tiktok: 'https://tiktok.com'
-        };
-        changed = true;
-      }
+    }
+    if (config.identity && !config.identity.socialLinks) {
+      config.identity = { ...config.identity, socialLinks: { facebook: '', instagram: '', whatsapp: '', twitter: '', tiktok: '' } };
+      changed = true;
+    }
+    
+    // Upgrade payment methods if they are empty
+    if (!config.checkout.paymentMethods || config.checkout.paymentMethods.length === 0) {
+      config.checkout.paymentMethods = [
+        { id: 'mobile_money', name: 'Mobile Money', description: 'Paiement via TMoney ou Moov Money', enabled: true, instructions: 'Veuillez effectuer le transfert au numéro ci-dessous puis validez votre commande.', details: { number: '+228 90 00 00 00', owner: 'NexaFlow SARL' } },
+        { id: 'bank_transfer', name: 'Virement Bancaire', description: 'Virement sur notre compte bancaire', enabled: true, instructions: 'Veuillez effectuer le virement sur le compte suivant. Votre commande sera traitée après réception.', details: { bank: 'UTB Togo', iban: 'TG12 0000 0000 0000 0000 00', owner: 'NexaFlow SARL' } },
+        { id: 'cash', name: 'Paiement à la livraison', description: 'Payez en espèces lors de la réception', enabled: true, instructions: 'Veuillez préparer le montant exact pour faciliter la remise par le livreur.', details: {} }
+      ];
+      changed = true;
+    }
 
-      // Ensure appearance exists for old configs
-      if (!config.appearance) {
-        config.appearance = {
-          theme: 'blue',
-          darkMode: false,
-          language: 'fr'
-        };
-        changed = true;
-      }
+    if (!config.appearance) {
+      config.appearance = { theme: 'blue', darkMode: false, language: 'fr' };
+      changed = true;
+    }
 
-      if (changed) {
-        // Use raw SQL to avoid TypeORM JSONB tracking bugs that would overwrite other columns
-        await this.configRepository.query(
-          `UPDATE store_config SET
-            identity  = $1::jsonb,
-            checkout  = $2::jsonb,
-            content   = $3::jsonb,
-            seo       = $4::jsonb,
-            social    = $5::jsonb,
-            partners  = $6::jsonb,
-            features  = $7::jsonb,
-            appearance = $8::jsonb,
-            "updatedAt" = NOW()
-           WHERE id = 'default'`,
-          [
-            JSON.stringify(config.identity || {}),
-            JSON.stringify(config.checkout || {}),
-            JSON.stringify(config.content || {}),
-            JSON.stringify(config.seo || {}),
-            JSON.stringify(config.social || {}),
-            JSON.stringify(Array.isArray(config.partners) ? config.partners : []),
-            JSON.stringify(Array.isArray(config.features) ? config.features : []),
-            JSON.stringify(config.appearance || {}),
-          ]
-        );
-        // Reload fresh from DB so we return the true persisted state
-        config = (await this.configRepository.findOne({ where: { id: 'default' } }))!;
-      }
+    if (!config.security) {
+      config.security = { jwtExpiresIn: '24h', idleTimeoutMinutes: 30, autoLockEnabled: true };
+      changed = true;
+    }
+
+    if (changed) {
+      return this.configRepository.save(config);
     }
     
     return config;
@@ -195,64 +126,30 @@ export class StoreConfigService {
   async update(updateStoreConfigDto: UpdateStoreConfigDto): Promise<StoreConfig> {
     const config = await this.get();
     
-    // Deep merge for nested objects to prevent data loss on partial updates
     if (updateStoreConfigDto.identity) {
       config.identity = { ...config.identity, ...updateStoreConfigDto.identity };
     }
     if (updateStoreConfigDto.checkout) {
       config.checkout = { ...config.checkout, ...updateStoreConfigDto.checkout };
-      if (updateStoreConfigDto.checkout.tax) {
-        config.checkout.tax = { ...config.checkout.tax, ...updateStoreConfigDto.checkout.tax };
-      }
     }
     if (updateStoreConfigDto.content) {
       config.content = { ...config.content, ...updateStoreConfigDto.content };
-      if (updateStoreConfigDto.content.announcementBar) {
-        config.content.announcementBar = { ...config.content.announcementBar, ...updateStoreConfigDto.content.announcementBar };
-      }
     }
-    
-    // Overwrite arrays entirely — sanitize to prevent corrupted [[], []] from entering DB
     if (updateStoreConfigDto.partners !== undefined) {
-      config.partners = this.sanitizePartners(
-        JSON.parse(JSON.stringify(updateStoreConfigDto.partners))
-      );
+      config.partners = updateStoreConfigDto.partners;
     }
     if (updateStoreConfigDto.features) {
-      config.features = JSON.parse(JSON.stringify(updateStoreConfigDto.features));
+      config.features = updateStoreConfigDto.features;
     }
     if (updateStoreConfigDto.appearance) {
       config.appearance = { ...config.appearance, ...updateStoreConfigDto.appearance };
     }
+    if (updateStoreConfigDto.security) {
+      config.security = { ...config.security, ...updateStoreConfigDto.security };
+    }
 
-    // Use raw SQL to 100% guarantee JSONB columns are written correctly,
-    // bypassing all TypeORM entity tracking and serialization issues.
-    await this.configRepository.query(
-      `UPDATE store_config SET
-        identity  = $1::jsonb,
-        checkout  = $2::jsonb,
-        content   = $3::jsonb,
-        seo       = $4::jsonb,
-        social    = $5::jsonb,
-        partners  = $6::jsonb,
-        features  = $7::jsonb,
-        appearance = $8::jsonb,
-        "updatedAt" = NOW()
-       WHERE id = 'default'`,
-      [
-        JSON.stringify(config.identity || {}),
-        JSON.stringify(config.checkout || {}),
-        JSON.stringify(config.content || {}),
-        JSON.stringify(config.seo || {}),
-        JSON.stringify(config.social || {}),
-        JSON.stringify(Array.isArray(config.partners) ? config.partners : []),
-        JSON.stringify(Array.isArray(config.features) ? config.features : []),
-        JSON.stringify(config.appearance || {}),
-      ]
-    );
-
-    // Read fresh from DB to return the true persisted state
-    return this.configRepository.findOne({ where: { id: 'default' } }).then(c => c!);
+    // Setting the WHOLE object/array ensures TypeORM detects the change on JSONB columns
+    return this.configRepository.save(config);
   }
 }
   
