@@ -7,7 +7,9 @@ import {
   Query,
   HttpStatus,
   HttpCode,
+  SetMetadata,
 } from '@nestjs/common';
+import { Public } from '../../common/decorators/public.decorator';
 import {
   ApiTags,
   ApiOperation,
@@ -28,8 +30,7 @@ import { PaginatedResponse } from '../../common/interfaces/paginated-response.in
 export class ShopController {
   constructor(private readonly shopService: ShopService) {}
 
-  // ============ CATALOGUE PUBLIC ============
-
+  @Public()
   @Get('products')
   @ApiOperation({ summary: 'Catalogue public des produits' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -70,6 +71,7 @@ export class ShopController {
   //     // À implémenter avec un flag isFeatured
   //     return [];
   //   }
+  @Public()
   @Get('products/search')
   @ApiOperation({ summary: 'Recherche de produits' })
   @ApiQuery({ name: 'q', required: true, type: String })
@@ -80,6 +82,7 @@ export class ShopController {
     return this.shopService.searchProducts(query);
   }
 
+  @Public()
   @Get('products/category/:categorySlug')
   @ApiOperation({ summary: 'Produits par catégorie' })
   @ApiParam({ name: 'categorySlug', description: 'Slug de la catégorie' })
@@ -90,6 +93,7 @@ export class ShopController {
     return this.shopService.getProductsByCategory(categorySlug);
   }
 
+  @Public()
   @Get('products/:id')
   @ApiOperation({ summary: "Détail d'un produit" })
   @ApiParam({ name: 'id', description: 'ID ou slug du produit' })
@@ -99,6 +103,7 @@ export class ShopController {
     return this.shopService.getPublicProduct(id);
   }
 
+  @Public()
   @Get('categories')
   @ApiOperation({ summary: 'Liste des catégories actives' })
   @ApiResponse({ status: 200, description: 'Liste des catégories' })
@@ -142,6 +147,7 @@ export class ShopController {
 
   // ============ UTILITAIRES ============
 
+  @Public()
   @Get('stock/check/:productId')
   @ApiOperation({ summary: "Vérifier le stock d'un produit" })
   @ApiParam({ name: 'productId', description: 'ID du produit' })
