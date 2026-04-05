@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Query,
@@ -10,6 +11,7 @@ import {
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
+import { OrderStatus } from './entities/order.entity';
 import {
   ApiTags,
   ApiOperation,
@@ -64,6 +66,18 @@ export class OrdersController {
       throw new BadRequestException('Veuillez fournir le numéro de commande et l\'email/téléphone');
     }
     return this.ordersService.trackOrder(body.orderNumber, body.emailOrPhone);
+  }
+
+  @Patch(':id/status')
+  @ApiOperation({ summary: 'Mettre à jour le statut d\'une commande' })
+  @ApiParam({ name: 'id', description: 'ID de la commande' })
+  @ApiResponse({ status: 200, description: 'Statut mis à jour' })
+  updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: OrderStatus },
+    @CurrentUser() user: any,
+  ) {
+    return this.ordersService.updateStatus(id, body.status, user);
   }
 
   @Get()

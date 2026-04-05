@@ -37,7 +37,13 @@ export class InventoriesService {
       relations: ['warehouse']
     });
 
-    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+    // Map warehouseName for frontend
+    const mappedData = data.map(inv => ({
+      ...inv,
+      warehouseName: inv.warehouse?.name || 'N/A'
+    }));
+
+    return { data: mappedData, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
   async findOne(id: string) {
@@ -46,7 +52,11 @@ export class InventoriesService {
       relations: ['warehouse']
     });
     if (!inv) throw new NotFoundException('Inventaire non trouvé');
-    return inv;
+    
+    return {
+      ...inv,
+      warehouseName: inv.warehouse?.name || 'N/A'
+    };
   }
 
   async create(dto: CreateInventoryDto) {
@@ -81,10 +91,10 @@ export class InventoriesService {
     const products = await this.productRepository.find();
     const items: InventoryCountItem[] = products.map(p => ({
       productId: p.id,
-      productName: p.name,
-      sku: p.sku,
-      expectedQuantity: p.stock,
-      countedQuantity: p.stock, // Default to expected
+      productName: p.name || 'Produit inconnu',
+      sku: p.sku || 'N/A',
+      expectedQuantity: Number(p.stock) || 0,
+      countedQuantity: Number(p.stock) || 0, // Default to expected for convenience
       variance: 0
     }));
 

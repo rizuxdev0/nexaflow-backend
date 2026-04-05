@@ -29,6 +29,8 @@ import {
 } from '../../common/interfaces/paginated-response.interface';
 import { StockService } from '../stock/stock.service';
 import { StockMovementType } from '../stock/entities/stock-movement.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entity';
 
 @Injectable()
 export class OrdersService {
@@ -46,6 +48,7 @@ export class OrdersService {
     private dataSource: DataSource,
     private auditService: AuditService,
     private stockService: StockService,
+    private notificationsService: NotificationsService,
   ) {}
 
   //   async createPosOrder(
@@ -318,6 +321,7 @@ export class OrdersService {
         customerId: createPosOrderDto.customerId,
         notes: createPosOrderDto.notes,
         orderDate: new Date(),
+        statusHistory: [{ status: createPosOrderDto.status || OrderStatus.COMPLETED, timestamp: new Date() }],
       }) as Order;
 
       const savedOrder = await queryRunner.manager.save(order);
@@ -400,6 +404,15 @@ export class OrdersService {
         newData: savedOrder,
       });
 
+      // Notification admin: Nouvelle vente POS
+      await this.notificationsService.create({
+        type: NotificationType.ORDER,
+        userId: userId,
+        title: 'Nouvelle vente POS',
+        message: `Une nouvelle commande POS #${orderNumber} a été finalisée (${total} FCFA)`,
+        link: `/admin/orders`
+      });
+
       await queryRunner.commitTransaction();
 
       return {
@@ -460,6 +473,7 @@ export class OrdersService {
         shippingAddress: createOrderDto.shippingAddress,
         notes: createOrderDto.notes,
         orderDate: new Date(),
+        statusHistory: [{ status: createOrderDto.status || OrderStatus.PENDING, timestamp: new Date() }],
       }) as Order;
 
       const savedOrder = await queryRunner.manager.save(order);
@@ -500,6 +514,14 @@ export class OrdersService {
         resourceId: savedOrder.id,
         details: `Nouvelle commande ${createOrderDto.source || ''} #${orderNumber} - Total: ${total} FCFA`,
         newData: savedOrder,
+      });
+
+      // Notification admin: Commande e-commerce
+      await this.notificationsService.create({
+        type: NotificationType.ORDER,
+        title: 'Nouvelle commande e-commerce',
+        message: `Une commande #${savedOrder.orderNumber} vient d'être reçue de la part de ${savedOrder.customerName}`,
+        link: `/admin/orders`
       });
 
       await queryRunner.commitTransaction();
@@ -686,6 +708,88 @@ export class OrdersService {
       order: { createdAt: 'DESC' },
       take: limit,
     });
+  }
+
+  private getStatusRank(status: OrderStatus): number {
+    const ranks = {
+      [OrderStatus.DRAFT]: 0,
+      [OrderStatus.PENDING]: 1,
+      [OrderStatus.CONFIRMED]: 2,
+      [OrderStatus.PROCESSING]: 3,
+      [OrderStatus.SHIPPED]: 4,
+      [OrderStatus.DELIVERED]: 5,
+      [OrderStatus.COMPLETED]: 6,
+      [OrderStatus.CANCELLED]: 99,
+      [OrderStatus.REFUNDED]: 100,
+    };
+    return (ranks as any)[status] || 0;
+  }
+
+  async updateStatus(id: string, status: OrderStatus, user: any): Promise<Order> {
+    const userId = user?.id || null;
+    const userName = user?.name || 'Utilisateur';
+    const order = await this.findOne(id);
+    const previousStatus = order.status;
+
+    // Vérification de la progression (interdire de revenir en arrière)
+    const currentRank = this.getStatusRank(previousStatus);
+    const newRank = this.getStatusRank(status);
+
+    // Si on essaie de revenir en arrière (sauf vers Annulé/Remboursé si pas déjà au bout)
+    if (newRank < currentRank && status !== OrderStatus.CANCELLED && status !== OrderStatus.REFUNDED) {
+      throw new BadRequestException(
+        `Impossible de passer de '${previousStatus}' à '${status}'. On ne peut pas revenir en arrière dans les étapes.`,
+      );
+    }
+
+    // Interdire de modifier une commande déjà annulée ou terminée (sauf remboursement)
+    if (
+      (previousStatus === OrderStatus.CANCELLED || previousStatus === OrderStatus.COMPLETED) &&
+      status !== OrderStatus.REFUNDED
+    ) {
+      const msg = previousStatus === OrderStatus.CANCELLED ? 'annulée' : 'terminée';
+      throw new BadRequestException(
+        `La commande est déjà ${msg} et ne peut plus être modifiée (sauf remboursement).`,
+      );
+    }
+
+    order.status = status;
+    
+    // Enregistrement de l'historique
+    if (!order.statusHistory) order.statusHistory = [];
+    order.statusHistory.push({ status, timestamp: new Date() });
+    
+    // Automatisation de certains états de paiement
+    if (status === OrderStatus.COMPLETED || status === OrderStatus.DELIVERED) {
+      if (order.paymentStatus !== PaymentStatus.PAID) {
+        order.paymentStatus = PaymentStatus.PAID;
+        order.paidAt = new Date();
+      }
+    }
+
+    const saved = await this.ordersRepository.save(order);
+
+    await this.auditService.log({
+      userId,
+      userName,
+      action: AuditAction.UPDATE,
+      resource: 'Order',
+      resourceId: id,
+      details: `Statut commande ${order.orderNumber} modifié: ${previousStatus} → ${status}`,
+      oldData: { status: previousStatus },
+      newData: { status },
+    });
+
+    // Notification changement statut (Client et Admin)
+    await this.notificationsService.notifyOrderUpdate(
+      order.id,
+      order.orderNumber,
+      status,
+      order.customerId,
+      order.userId
+    );
+
+    return saved;
   }
 
   async trackOrder(orderNumber: string, emailOrPhone: string): Promise<Order> {

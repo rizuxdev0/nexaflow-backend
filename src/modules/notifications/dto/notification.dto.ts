@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsUUID, IsBoolean, IsArray, IsDateString, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsUUID, IsBoolean, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 import { NotificationType } from '../entities/notification.entity';
 
 export class CreateNotificationDto {
@@ -41,13 +42,16 @@ export class NotificationFilterDto {
 
   @IsBoolean()
   @IsOptional()
+  @Type(() => Boolean)
   isRead?: boolean;
 
   @IsNumber()
   @IsOptional()
+  @Type(() => Number)
   page?: number;
 
   @IsNumber()
   @IsOptional()
+  @Type(() => Number)
   pageSize?: number;
 }

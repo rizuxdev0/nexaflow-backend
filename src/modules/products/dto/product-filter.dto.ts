@@ -5,7 +5,7 @@ import { PaginationDto } from '../../../common/dto/pagination.dto';
 export class ProductFilterDto extends PaginationDto {
   @IsOptional()
   @IsUUID()
-  categoryId?: string;
+  declare categoryId?: string;
 
   @IsOptional()
   @IsUUID()
@@ -14,12 +14,12 @@ export class ProductFilterDto extends PaginationDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  minPrice?: number;
+  declare minPrice?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  maxPrice?: number;
+  declare maxPrice?: number;
 
   @IsOptional()
   @Transform(({ value }) => {

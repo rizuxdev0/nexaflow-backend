@@ -17,4 +17,16 @@ export class PaginationDto {
 
   @IsOptional()
   search?: string;
+
+  @IsOptional()
+  categoryId?: string;
+
+  @IsOptional()
+  minPrice?: any;
+
+  @IsOptional()
+  maxPrice?: any;
+
+  @IsOptional()
+  sortBy?: any;
 }

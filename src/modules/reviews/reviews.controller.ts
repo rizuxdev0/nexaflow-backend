@@ -39,7 +39,6 @@ export class ReviewsController {
     return this.reviewsService.getRecentReviews(+limit || 10);
   }
 
-  @Public() // Can be protected if we restrict reviews to logged-in users only.
   @Post()
   create(@Body() createReviewDto: CreateReviewDto) {
     return this.reviewsService.create(createReviewDto);

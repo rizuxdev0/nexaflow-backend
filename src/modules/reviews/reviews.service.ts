@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Review } from './entities/review.entity';
@@ -40,9 +40,23 @@ export class ReviewsService {
   }
 
   async create(createReviewDto: CreateReviewDto): Promise<Review> {
+    // Prevent duplicate reviews for the same product by the same customer (except for guests)
+    if (createReviewDto.customerId && createReviewDto.customerId !== 'guest') {
+      const existing = await this.reviewRepository.findOne({
+        where: {
+          productId: createReviewDto.productId,
+          customerId: createReviewDto.customerId,
+        },
+      });
+
+      if (existing) {
+        throw new ConflictException('Vous avez déjà donné votre avis sur ce produit.');
+      }
+    }
+
     const review = this.reviewRepository.create({
       ...createReviewDto,
-      status: 'pending', // Requires moderation
+      status: 'approved', // Auto-approve for immediate visibility as requested
       helpful: 0,
     });
     return this.reviewRepository.save(review);

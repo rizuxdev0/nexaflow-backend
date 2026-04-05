@@ -13,7 +13,11 @@ export class StoreConfigService {
 
   // Sanitize partners: ensure each element is a plain object, not an array or primitive
   private sanitizePartners(raw: any[]): any[] {
-    if (!Array.isArray(raw)) return [];
+    if (!raw) return [];
+    if (!Array.isArray(raw)) {
+       console.warn('Partners is not an array:', typeof raw);
+       return [];
+    }
     return raw.filter(p => p && typeof p === 'object' && !Array.isArray(p));
   }
 
@@ -209,7 +213,9 @@ export class StoreConfigService {
       config.content = { ...config.content, ...updateStoreConfigDto.content };
     }
     if (updateStoreConfigDto.partners !== undefined) {
+      console.log('Receiving partners update:', JSON.stringify(updateStoreConfigDto.partners));
       config.partners = this.sanitizePartners(updateStoreConfigDto.partners);
+      console.log('Sanitized partners total:', config.partners.length);
     }
     if (updateStoreConfigDto.features) {
       const defaultFeatures = [
@@ -247,15 +253,28 @@ export class StoreConfigService {
     }
 
     // 👈 FORCED SYNC: Use a more direct update method to avoid TypeORM JSONB save issues
-    await this.configRepository.update('default', {
-      identity: config.identity,
-      checkout: config.checkout,
-      content: config.content,
-      partners: config.partners,
-      features: config.features,
-      appearance: config.appearance,
-      security: config.security
-    });
+    // We use raw SQL to ensure Postgres receives the correct JSONB data
+    await this.configRepository.query(
+      `UPDATE store_config 
+       SET identity = $1, 
+           checkout = $2, 
+           content = $3, 
+           partners = $4, 
+           features = $5, 
+           appearance = $6, 
+           security = $7,
+           "updatedAt" = NOW()
+       WHERE id = 'default'`,
+      [
+        JSON.stringify(config.identity),
+        JSON.stringify(config.checkout),
+        JSON.stringify(config.content),
+        JSON.stringify(config.partners),
+        JSON.stringify(config.features),
+        JSON.stringify(config.appearance),
+        JSON.stringify(config.security),
+      ],
+    );
 
     return config;
   }

@@ -47,7 +47,7 @@ export class NotificationsService {
       type: NotificationType.STOCK,
       title: 'Alerte stock bas',
       message: `Le produit ${productName} (${sku}) est à ${currentStock} unités (Seuil atteint)`,
-      link: `/inventory/products`, // UI link
+      link: `/admin/stock`, // UI link
     });
   }
 
@@ -58,7 +58,7 @@ export class NotificationsService {
       userId,
       title: 'Mise à jour de commande',
       message: `La commande ${orderNumber} est désormais ${status}`,
-      link: `/orders/${orderId}`,
+      link: `/admin/orders`,
       metadata: { orderId, orderNumber, status }
     });
   }

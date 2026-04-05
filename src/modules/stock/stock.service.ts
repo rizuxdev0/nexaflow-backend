@@ -5,6 +5,7 @@ import { StockMovement, StockMovementType } from './entities/stock-movement.enti
 import { Product } from '../products/entities/product.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 
 @Injectable()
@@ -15,6 +16,7 @@ export class StockService {
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createMovement(data: {
@@ -53,6 +55,11 @@ export class StockService {
       newStock,
     });
     const saved = await this.movementRepository.save(movement);
+
+    // Alert if stock is too low (< 10)
+    if (newStock < 10) {
+      await this.notificationsService.notifyLowStock(product.name, product.sku, newStock);
+    }
 
     // Log audit
     await this.auditService.log({

@@ -23,6 +23,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
+import { UserFilterDto } from './dto/user-filter.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -56,19 +57,19 @@ export class UsersController {
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'roleId', required: false, type: String })
+  @ApiQuery({ name: 'role', required: false, type: String })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   @ApiResponse({ status: 200, description: 'Liste des utilisateurs' })
   async findAll(
-    @Query() paginationDto: PaginationDto,
-    @Query('roleId') roleId?: string,
-    @Query('isActive') isActive?: boolean,
+    @Query() filterDto: UserFilterDto,
   ): Promise<PaginatedResponse<UserResponseDto>> {
     return this.usersService.findAll(
-      paginationDto.page,
-      paginationDto.pageSize,
-      paginationDto.search,
-      roleId,
-      isActive,
+      filterDto.page,
+      filterDto.pageSize,
+      filterDto.search,
+      filterDto.roleId,
+      filterDto.isActive,
+      filterDto.role,
     );
   }
 

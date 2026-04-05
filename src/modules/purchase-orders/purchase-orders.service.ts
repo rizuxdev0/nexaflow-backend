@@ -145,62 +145,108 @@ export class PurchaseOrdersService {
     return saved;
   }
 
-  async autoGenerate(userId?: string) {
-    // Generate suggestions based on minStock
-    const lowStockProducts = await this.productRepository.find({
-      where: {
-        stock: LessThanOrEqual(0) // wait, actually should be LessThan(minStock)
-      },
-      relations: ['supplier']
+  async getSuggestions(userId?: string) {
+    // 1. Identify products whose stock (current + pending) is below minStock
+    // We need to account for products already being ordered (status draft, sent, confirmed, partial)
+    const activePOs = await this.poRepository.createQueryBuilder('po')
+      .where('po.status NOT IN (:...excluded)', { excluded: [PurchaseOrderStatus.RECEIVED, PurchaseOrderStatus.CANCELLED] })
+      .getMany();
+
+    const pendingQuantities = new Map<string, number>();
+    activePOs.forEach(po => {
+      po.items.forEach(item => {
+        const currentPending = pendingQuantities.get(item.productId) || 0;
+        const remainingToReceive = item.quantity - item.receivedQuantity;
+        pendingQuantities.set(item.productId, currentPending + remainingToReceive);
+      });
     });
-    // For now, simpler: all below minStock
-    // Actually, I'll use query builder or a loop
-    const productsToOrder = await this.productRepository
-        .createQueryBuilder('p')
-        .where('p.stock <= p.minStock')
-        .getMany();
 
-    if (productsToOrder.length === 0) return { message: 'Aucun produit en rupture de stock critique' };
+    // 2. Fetch all products to check stock levels
+    const allProducts = await this.productRepository.find({ relations: ['supplier'] });
+    console.log(`[PO Suggestions] Analyzing ${allProducts.length} products...`);
+    
+    // Filter products that actually need replenishment
+    const productsToOrder = allProducts.filter(p => {
+      const stockVal = Number(p.stock) || 0;
+      const minStockVal = Number(p.minStock) || 0;
+      const pending = pendingQuantities.get(p.id) || 0;
+      const virtualStock = stockVal + pending;
 
-    // Group by supplier
-    const ordersBySupplier = new Map<string, any[]>();
-    productsToOrder.forEach(p => {
-      if (p.supplierId) {
-        if (!ordersBySupplier.has(p.supplierId)) ordersBySupplier.set(p.supplierId, []);
-        ordersBySupplier.get(p.supplierId)!.push(p);
+      const needsOrder = virtualStock <= minStockVal && !!p.supplierId;
+      
+      if (virtualStock <= minStockVal && !p.supplierId) {
+        console.warn(`[PO Suggestions] Product ${p.name} (${p.sku}) is below threshold (${virtualStock}/${minStockVal}) but has NO supplier.`);
       }
+      return needsOrder;
     });
+
+    console.log(`[PO Suggestions] Found ${productsToOrder.length} products needing replenishment.`);
+
+    if (productsToOrder.length === 0) return [];
+
+    // 3. Group by supplier
+    const ordersBySupplier = new Map<string, { supplierId: string, supplierName: string, items: any[] }>();
+    
+    for (const p of productsToOrder) {
+      if (!p.supplierId) continue;
+      
+      const sid = p.supplierId;
+      if (!ordersBySupplier.has(sid)) {
+        ordersBySupplier.set(sid, { 
+          supplierId: sid, 
+          supplierName: p.supplier?.name || 'Fournisseur inconnu', 
+          items: [] 
+        });
+      }
+
+      const stockVal = Number(p.stock) || 0;
+      const minStockVal = Number(p.minStock) || 0;
+      const maxStockVal = Number(p.maxStock) || 100;
+      const pending = pendingQuantities.get(p.id) || 0;
+      const virtualStock = stockVal + pending;
+      
+      // Calculate quantity: fill up to maxStock, ensure it's at least minStock * 2 to justify the PO
+      const baseReplenish = maxStockVal - virtualStock;
+      const orderQty = Math.max(baseReplenish, minStockVal * 2);
+
+      const grp = ordersBySupplier.get(sid);
+      if (orderQty > 0 && grp) {
+        grp.items.push({
+          productId: p.id,
+          productName: p.name,
+          sku: p.sku,
+          quantity: orderQty,
+          unitCost: Number(p.costPrice) || 0,
+          receivedQuantity: 0,
+          total: orderQty * (Number(p.costPrice) || 0)
+        });
+      }
+    }
 
     const createdOrders: PurchaseOrder[] = [];
 
-    for (const [supplierId, products] of ordersBySupplier.entries()) {
-      const items = products.map(p => ({
-        productId: p.id,
-        productName: p.name,
-        sku: p.sku,
-        quantity: p.maxStock - p.stock,
-        unitCost: Number(p.costPrice),
-        receivedQuantity: 0,
-        total: (p.maxStock - p.stock) * Number(p.costPrice)
-      }));
+    // 4. Create Draft Purchase Orders
+    for (const group of Array.from(ordersBySupplier.values())) {
+      if (group.items.length === 0) continue;
 
-      const subtotal = items.reduce((acc, i) => acc + i.total, 0);
-      const taxTotal = subtotal * 0.18;
+      const subtotal = group.items.reduce((acc, i) => acc + i.total, 0);
+      const taxTotal = Math.round(subtotal * 0.18); // Example fixed tax for now
       const total = subtotal + taxTotal;
 
       const po = await this.create({
-        supplierId,
-        items,
+        supplierId: group.supplierId,
+        items: group.items,
         subtotal,
         taxTotal,
         total,
         expectedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // J+7
         isAutoGenerated: true,
+        notes: 'Généré automatiquement — Analyse intelligente du stock bas',
       });
       createdOrders.push(po);
     }
 
-    return { createdCount: createdOrders.length, orders: createdOrders };
+    return createdOrders;
   }
 
   private async generatePoNumber(): Promise<string> {

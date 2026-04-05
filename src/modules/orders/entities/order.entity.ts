@@ -127,4 +127,7 @@ export class Order {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @Column({ type: 'jsonb', nullable: true })
+  statusHistory: Array<{ status: string; timestamp: Date }>;
 }

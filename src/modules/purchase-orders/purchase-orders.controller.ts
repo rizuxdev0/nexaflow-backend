@@ -22,6 +22,12 @@ export class PurchaseOrdersController {
     return this.poService.findAll(query);
   }
 
+  @Get('suggestions')
+  @Permissions('suppliers.read')
+  getSuggestions() {
+    return this.poService.getSuggestions();
+  }
+
   @Get(':id')
   @Permissions('suppliers.read')
   findOne(@Param('id') id: string) {
@@ -54,9 +60,4 @@ export class PurchaseOrdersController {
     return this.poService.receive(id, dto, userId);
   }
 
-  @Post('auto-generate')
-  @Permissions('suppliers.update')
-  autoGenerate(@CurrentUser('id') userId: string) {
-    return this.poService.autoGenerate(userId);
-  }
 }

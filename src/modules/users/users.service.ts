@@ -107,6 +107,7 @@ export class UsersService {
     search?: string,
     roleId?: string,
     isActive?: boolean,
+    roleName?: string,
   ): Promise<PaginatedResponse<UserResponseDto>> {
     const where: FindOptionsWhere<User> = {};
 
@@ -117,6 +118,10 @@ export class UsersService {
 
     if (roleId) {
       where.roleId = roleId;
+    }
+
+    if (roleName) {
+      where.role = { name: roleName };
     }
 
     if (isActive !== undefined) {
