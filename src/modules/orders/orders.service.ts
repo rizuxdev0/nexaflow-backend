@@ -519,6 +519,8 @@ export class OrdersService {
       // Notification admin: Commande e-commerce
       await this.notificationsService.create({
         type: NotificationType.ORDER,
+        userId: undefined,
+        customerId: undefined,
         title: 'Nouvelle commande e-commerce',
         message: `Une commande #${savedOrder.orderNumber} vient d'être reçue de la part de ${savedOrder.customerName}`,
         link: `/admin/orders`

@@ -49,6 +49,14 @@ export class ReturnsService {
     return ret;
   }
 
+  async findByCustomer(customerId: string) {
+    return this.returnRepository.find({
+      where: { customerId },
+      order: { createdAt: 'DESC' },
+      relations: ['order']
+    });
+  }
+
   async create(dto: CreateReturnDto) {
     const order = await this.orderRepository.findOne({ where: { id: dto.orderId } });
     if (!order) throw new NotFoundException('Commande non trouvée');

@@ -5,7 +5,7 @@ import { PaginationDto } from '../../../common/dto/pagination.dto';
 export class OrderFilterDto extends PaginationDto {
   @IsOptional()
   @IsEnum(OrderStatus)
-  status?: OrderStatus;
+  declare status?: OrderStatus;
 
   @IsOptional()
   @IsEnum(PaymentStatus)
@@ -13,7 +13,7 @@ export class OrderFilterDto extends PaginationDto {
 
   @IsOptional()
   @IsUUID()
-  customerId?: string;
+  declare customerId?: string;
 
   @IsOptional()
   @IsUUID()

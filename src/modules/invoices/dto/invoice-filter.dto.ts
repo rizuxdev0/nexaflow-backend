@@ -7,7 +7,7 @@ export class InvoiceFilterDto extends PaginationDto {
   @ApiPropertyOptional({ enum: InvoiceStatus })
   @IsEnum(InvoiceStatus)
   @IsOptional()
-  status?: InvoiceStatus;
+  declare status?: InvoiceStatus;
 
   @ApiPropertyOptional()
   @IsString()
@@ -27,5 +27,5 @@ export class InvoiceFilterDto extends PaginationDto {
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
-  customerId?: string;
+  declare customerId?: string;
 }

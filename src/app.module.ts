@@ -62,6 +62,7 @@ import { join } from 'path';
 import { WishlistModule } from './modules/wishlist/wishlist.module';
 import { VendorRequestsModule } from './modules/vendor-requests/vendor-requests.module';
 import { DeliveriesModule } from './modules/deliveries/deliveries.module';
+import { CustomPacksModule } from './modules/custom-packs/custom-packs.module';
 
 
 
@@ -138,6 +139,7 @@ import { DeliveriesModule } from './modules/deliveries/deliveries.module';
     WishlistModule,
     VendorRequestsModule,
     DeliveriesModule,
+    CustomPacksModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',

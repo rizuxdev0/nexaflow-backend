@@ -16,10 +16,22 @@ export class NotificationsController {
   constructor(private readonly notificationService: NotificationsService) {}
 
   @Get()
-  findAll(@Query() query: NotificationFilterDto, @CurrentUser('id') userId: string) {
-    // If not superadmin, automatically filter by user's notifications
-    // For simplicity, we assume frontend provides correct filter based on context
-    return this.notificationService.findAll(query);
+  findAll(
+    @Query() query: NotificationFilterDto,
+    @CurrentUser() user: any
+  ) {
+    const isCustomer = user.roles?.includes('customer');
+    
+    if (isCustomer) {
+      // Shoppers: see only their own and never admin notifications
+      query.customerId = user.id;
+      // Force null/undefined for userId filter in query to ensure isolation
+      return this.notificationService.findAll({ ...query, customerId: user.id, userId: undefined });
+    } else {
+      // Admins: see general, or their own, or everything if they have permissions
+      // We'll let the service handle the expanded fetch for admins
+      return this.notificationService.findAll(query, true);
+    }
   }
 
   @Get('my') // Fetch current user's notifications

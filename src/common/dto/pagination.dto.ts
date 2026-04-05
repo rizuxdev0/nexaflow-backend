@@ -29,4 +29,10 @@ export class PaginationDto {
 
   @IsOptional()
   sortBy?: any;
+
+  @IsOptional()
+  customerId?: string;
+
+  @IsOptional()
+  status?: string;
 }

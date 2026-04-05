@@ -28,6 +28,12 @@ export class ReturnsController {
   findOne(@Param('id') id: string) {
     return this.returnsService.findOne(id);
   }
+  
+  @Get('customer/:customerId')
+  @Permissions('orders.read')
+  findByCustomer(@Param('customerId') customerId: string) {
+    return this.returnsService.findByCustomer(customerId);
+  }
 
   @Post()
   @Permissions('orders.update')

@@ -11,11 +11,19 @@ export class NotificationsService {
     private readonly notificationRepository: Repository<Notification>,
   ) {}
 
-  async findAll(query: { userId?: string; customerId?: string; isRead?: boolean; page?: number; pageSize?: number }) {
+  async findAll(query: { userId?: string; customerId?: string; isRead?: boolean; page?: number; pageSize?: number }, isAdmin = false) {
     const { userId, customerId, isRead, page = 1, pageSize = 20 } = query;
     const where: any = {};
-    if (userId) where.userId = userId;
-    if (customerId) where.customerId = customerId;
+    
+    if (!isAdmin) {
+      if (!customerId) return { data: [], total: 0, page: 1, pageSize: 20, totalPages: 0 };
+      where.customerId = customerId;
+    } else if (customerId) {
+      where.customerId = customerId;
+    } else if (userId) {
+      where.userId = userId;
+    }
+
     if (isRead !== undefined) where.isRead = isRead;
 
     const [data, total] = await this.notificationRepository.findAndCount({
@@ -60,6 +68,21 @@ export class NotificationsService {
       message: `La commande ${orderNumber} est désormais ${status}`,
       link: `/admin/orders`,
       metadata: { orderId, orderNumber, status }
+    });
+  }
+
+  async notifyCustomPackUpdate(packId: string, customerName: string, status: string, customerId?: string, userId?: string) {
+    const isNew = status === 'pending';
+    return this.create({
+      type: NotificationType.PACK, 
+      customerId,
+      userId,
+      title: isNew ? 'Nouvelle demande de pack' : 'Statut de votre pack',
+      message: isNew 
+        ? `Une nouvelle demande de pack personnalisé a été soumise par ${customerName}`
+        : `Votre demande de pack personnalisé a été ${status === 'approved' ? 'approuvée' : 'refusée'}`,
+      link: isNew ? `/admin/stock?tab=packs` : `/boutique/profil?tab=packs`,
+      metadata: { packId, status, isCustomer: !isNew }
     });
   }
 

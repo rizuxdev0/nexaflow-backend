@@ -11,6 +11,8 @@ export enum NotificationType {
   STOCK = 'stock',
   PROMO = 'promo',
   SYSTEM = 'system',
+  INFO = 'info',
+  PACK = 'pack',
 }
 
 @Entity('notifications')

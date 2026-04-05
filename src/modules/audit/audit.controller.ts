@@ -15,11 +15,11 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 @ApiTags('audit')
 @Controller('audit')
 @ApiBearerAuth()
-@Roles('admin', 'super_admin')
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @Get()
+  @Roles('admin', 'super_admin') // Only admins can see the full log
   @Permissions('reports.read')
   @ApiOperation({ summary: "Liste paginée des logs d'audit" })
   @ApiResponse({ status: 200, description: 'Liste des logs' })
@@ -30,7 +30,6 @@ export class AuditController {
   }
 
   @Post()
-  @Permissions('reports.read') // Adjust or omit depending on access level needed, but keeping role
   @ApiOperation({ summary: "Ajouter un log d'audit manuellement" })
   @ApiResponse({ status: 201, description: 'Log créé' })
   async createLog(@Body() payload: any) {
@@ -38,6 +37,7 @@ export class AuditController {
   }
 
   @Get('stats')
+  @Roles('admin', 'super_admin')
   @Permissions('reports.read')
   @ApiOperation({ summary: "Statistiques des logs d'audit" })
   @ApiResponse({ status: 200, description: 'Statistiques' })
