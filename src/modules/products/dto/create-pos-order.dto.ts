@@ -40,6 +40,10 @@ class PosOrderItemDto {
   @IsUUID()
   @IsOptional()
   variantId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  isBundle?: boolean;
 }
 
 export class CreatePosOrderDto {

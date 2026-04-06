@@ -1,4 +1,5 @@
 import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsDateString, IsBoolean, Min, Max } from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
 import { BundleItem } from '../entities/package.entity';
 
 export class CreatePackageDto {
@@ -43,20 +44,24 @@ export class CreatePackageDto {
   image?: string;
 
   @IsDateString()
-  @IsNotEmpty()
-  startDate: Date;
+  @IsOptional()
+  startDate?: Date;
 
   @IsDateString()
-  @IsNotEmpty()
-  endDate: Date;
+  @IsOptional()
+  endDate?: Date;
 
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isHeroFeatured?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  heroPriority?: number;
 }
 
-export class UpdatePackageDto {
-  @IsBoolean()
-  @IsNotEmpty()
-  isActive: boolean;
-}
+export class UpdatePackageDto extends PartialType(CreatePackageDto) {}

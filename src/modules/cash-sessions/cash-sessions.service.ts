@@ -123,7 +123,7 @@ export class CashSessionsService {
   async findOne(id: string): Promise<CashSession> {
     const session = await this.sessionsRepository.findOne({
       where: { id },
-      relations: ['register', 'orders'],
+      relations: ['register', 'orders', 'user'],
     });
 
     if (!session) {
@@ -139,7 +139,7 @@ export class CashSessionsService {
         registerId,
         status: SessionStatus.OPEN,
       },
-      relations: ['register'],
+      relations: ['register', 'user'],
     });
 
     return session || null;
@@ -377,7 +377,7 @@ export class CashSessionsService {
       where: {
         openedAt: Between(startOfDay, endOfDay),
       },
-      relations: ['register'],
+      relations: ['register', 'user'],
     });
 
     const totalSales = sessions.reduce(

@@ -104,6 +104,12 @@ export class Product {
   @Column({ default: 0 })
   salesCount: number;
 
+  @Column({ default: false })
+  isHeroFeatured: boolean;
+
+  @Column({ default: 1 })
+  heroPriority: number;
+
   @Column({ type: 'jsonb', nullable: true })
   wholesaleTiers: { minQuantity: number; price: number; discount: number }[];
 

@@ -1,5 +1,38 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsEnum, IsUUID, IsArray, IsDateString, Min } from 'class-validator';
-import { SavedCartItem } from '../entities/saved-cart.entity';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, IsArray, IsDateString, Min, ValidateNested, IsUUID, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class SavedCartItemDto {
+  @IsString()
+  @IsNotEmpty()
+  productId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  productName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  sku: string;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsNotEmpty()
+  @Min(1)
+  quantity: number;
+
+  @IsNumber()
+  @Type(() => Number)
+  @IsNotEmpty()
+  unitPrice: number;
+
+  @IsString()
+  @IsOptional()
+  image?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isBundle?: boolean;
+}
 
 export class CreateSavedCartDto {
   @IsUUID()
@@ -11,8 +44,10 @@ export class CreateSavedCartDto {
   customerName: string;
 
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SavedCartItemDto)
   @IsNotEmpty()
-  items: SavedCartItem[];
+  items: SavedCartItemDto[];
 
   @IsNumber()
   @IsNotEmpty()

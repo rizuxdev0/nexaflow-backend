@@ -9,6 +9,7 @@ import { ProductVariant } from '../products/entities/product-variant.entity';
 import { CashSession } from '../cash-sessions/entities/cash-session.entity';
 import { AuditModule } from '../audit/audit.module';
 import { StockModule } from '../stock/stock.module';
+import { ProductBundle } from '../packages/entities/package.entity';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { StockModule } from '../stock/stock.module';
       Product,
       ProductVariant,
       CashSession,
+      ProductBundle,
     ]),
     AuditModule,
     StockModule,

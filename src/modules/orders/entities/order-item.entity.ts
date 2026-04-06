@@ -37,6 +37,9 @@ export class OrderItem {
   @Column({ nullable: true })
   variantId: string;
 
+  @Column({ default: false })
+  isBundle: boolean;
+
   @Column()
   quantity: number;
 

@@ -38,17 +38,33 @@ export class PackagesService {
     return bundle;
   }
 
+  private sanitizeItems(items: any[]): any[] {
+    if (!items || !Array.isArray(items)) return [];
+    return items.filter(i => i && typeof i === 'object' && !Array.isArray(i) && i.productId);
+  }
+
   async create(dto: CreatePackageDto) {
     const existing = await this.bundleRepository.findOne({ where: { slug: dto.slug } });
     if (existing) throw new BadRequestException('Ce slug est déjà utilisé');
 
-    const bundle = this.bundleRepository.create(dto);
+    const bundle = this.bundleRepository.create({
+      ...dto,
+      items: this.sanitizeItems(dto.items),
+      originalPrice: Number(dto.originalPrice) || 0,
+      bundlePrice: Number(dto.bundlePrice) || 0,
+    });
     return this.bundleRepository.save(bundle);
   }
 
   async update(id: string, dto: Partial<CreatePackageDto>) {
     const bundle = await this.findOne(id);
-    Object.assign(bundle, dto);
+    const sanitized = {
+      ...dto,
+      items: dto.items ? this.sanitizeItems(dto.items) : undefined,
+      originalPrice: dto.originalPrice !== undefined ? Number(dto.originalPrice) || 0 : undefined,
+      bundlePrice: dto.bundlePrice !== undefined ? Number(dto.bundlePrice) || 0 : undefined,
+    };
+    Object.assign(bundle, sanitized);
     return this.bundleRepository.save(bundle);
   }
 

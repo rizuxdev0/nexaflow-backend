@@ -206,4 +206,14 @@ export class CreateProductDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Afficher dans le Hero Shop', default: false })
+  @IsBoolean()
+  @IsOptional()
+  isHeroFeatured?: boolean;
+
+  @ApiPropertyOptional({ description: 'Priorité dans le Hero', default: 1 })
+  @IsNumber()
+  @IsOptional()
+  heroPriority?: number;
 }

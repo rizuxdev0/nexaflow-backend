@@ -45,14 +45,20 @@ export class ProductBundle {
   @Column({ nullable: true })
   image: string;
 
-  @Column()
+  @Column({ nullable: true })
   startDate: Date;
 
-  @Column()
+  @Column({ nullable: true })
   endDate: Date;
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ default: false })
+  isHeroFeatured: boolean;
+
+  @Column({ default: 1 })
+  heroPriority: number;
 
   @CreateDateColumn()
   createdAt: Date;

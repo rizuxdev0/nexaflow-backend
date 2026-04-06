@@ -13,6 +13,7 @@ import {
   CashSession,
   SessionStatus,
 } from '../cash-sessions/entities/cash-session.entity';
+import { ProductBundle } from '../packages/entities/package.entity';
 
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
@@ -45,6 +46,8 @@ export class OrdersService {
     private variantsRepository: Repository<ProductVariant>,
     @InjectRepository(CashSession)
     private sessionsRepository: Repository<CashSession>,
+    @InjectRepository(ProductBundle)
+    private bundlesRepository: Repository<ProductBundle>,
     private dataSource: DataSource,
     private auditService: AuditService,
     private stockService: StockService,
@@ -356,6 +359,12 @@ export class OrdersService {
           });
           item.variant.stock -= item.quantity;
           await queryRunner.manager.save(item.variant);
+        } else if ((item as any).isBundle) {
+          const bundle = await this.bundlesRepository.findOne({ where: { id: item.productId } });
+          if (bundle) {
+            bundle.stock -= item.quantity;
+            await queryRunner.manager.save(bundle);
+          }
         } else {
           await this.stockService.createMovement({
             productId: item.productId,
@@ -543,46 +552,42 @@ export class OrdersService {
       productId: string;
       quantity: number;
       variantId?: string;
-      product: Product;
+      product: any;
       variant: ProductVariant | null;
       unitPrice: number;
     }> = [];
 
-    for (const item of items) {
-      const product = await this.productsRepository.findOne({
-        where: { id: item.productId },
-      });
+    for (const item of (items as any[])) {
+      let product: any = null;
+      let variant: ProductVariant | null = null;
+      let unitPrice = 0;
 
-      if (!product) {
-        throw new NotFoundException(`Produit ${item.productId} non trouvé`);
+      if (item.isBundle) {
+        product = await this.bundlesRepository.findOne({
+          where: { id: item.productId },
+        });
+        if (!product) throw new NotFoundException(`Pack ${item.productId} non trouvé`);
+        unitPrice = Number(product.bundlePrice);
+      } else {
+        product = await this.productsRepository.findOne({
+          where: { id: item.productId },
+        });
+        if (!product) throw new NotFoundException(`Produit ${item.productId} non trouvé`);
+        unitPrice = Number(product.price);
+
+        if (item.variantId) {
+          variant = await this.variantsRepository.findOne({
+            where: { id: item.variantId, productId: item.productId },
+          });
+          if (!variant) throw new NotFoundException(`Variante ${item.variantId} non trouvée`);
+          unitPrice = Number(product.price) + Number(variant.priceModifier || 0);
+        }
       }
 
       if (product.stock < item.quantity) {
         throw new BadRequestException(
           `Stock insuffisant pour ${product.name}. Disponible: ${product.stock}`,
         );
-      }
-
-      let unitPrice = product.price;
-      let variant: ProductVariant | null = null;
-
-      // Si c'est une variante
-      if (item.variantId) {
-        variant = await this.variantsRepository.findOne({
-          where: { id: item.variantId, productId: item.productId },
-        });
-
-        if (!variant) {
-          throw new NotFoundException(`Variante ${item.variantId} non trouvée`);
-        }
-
-        if (variant.stock < item.quantity) {
-          throw new BadRequestException(
-            `Stock insuffisant pour la variante ${variant.name}. Disponible: ${variant.stock}`,
-          );
-        }
-
-        unitPrice = product.price + (variant.priceModifier || 0);
       }
 
       subtotal += unitPrice * item.quantity;
