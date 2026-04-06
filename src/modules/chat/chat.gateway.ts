@@ -16,7 +16,6 @@ import { WsJwtAuthGuard } from '../../common/guards/ws-jwt-auth.guard';
   cors: {
     origin: '*',
   },
-  namespace: 'chat',
 })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -40,19 +39,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     // We assume the user is injected by the guard
     const user = (client as any).user;
-    if (!user) return { status: 'error', message: 'Unauthorized' };
+    console.log('Chat message received from user:', user?.email, 'Type:', data.senderType);
+    
+    if (!user) {
+      console.error('Unauthorized chat attempt - no user in socket');
+      return { status: 'error', message: 'Unauthorized' };
+    }
 
     const message = await this.chatService.saveMessage({
       ...data,
-      senderId: user.id,
+      senderId: user.sub || user.id,
     });
     
     const conversation = await this.chatService.getConversation(data.conversationId);
     const enrichedMessage = { ...message, senderName: conversation.customerName };
 
+    console.log('Broadcasting enriched message to room:', data.conversationId);
     this.server.to(data.conversationId).emit('newMessage', enrichedMessage);
     
     if (enrichedMessage.senderType === 'customer') {
+      console.log('Sending admin notification for new customer message');
       this.server.emit('adminNotification', {
         type: 'new_message',
         conversationId: enrichedMessage.conversationId,

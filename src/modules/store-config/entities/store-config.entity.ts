@@ -32,6 +32,8 @@ export class StoreConfig {
   @Column({ type: 'jsonb', default: { jwtExpiresIn: '24h', idleTimeoutMinutes: 30, autoLockEnabled: true } })
   security: any;
 
+  @Column({ type: 'jsonb', default: { facebook: '', google: '', tiktok: '', pinterest: '', snapchat: '', customScripts: [] } })
+  pixels: any;
 
   @UpdateDateColumn()
   updatedAt: Date;

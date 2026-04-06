@@ -86,6 +86,16 @@ export class NotificationsService {
     });
   }
 
+  async notifyVendorRequest(requestId: string, storeName: string, customerName: string) {
+    return this.create({
+      type: NotificationType.VENDOR_REQUEST,
+      title: 'Nouvelle demande vendeur',
+      message: `${customerName} souhaite devenir vendeur pour la boutique "${storeName}"`,
+      link: '/admin/marketplace?tab=requests',
+      metadata: { requestId, storeName, customerName }
+    });
+  }
+
   async markRead(id: string) {
     const notif = await this.findOne(id);
     notif.isRead = true;

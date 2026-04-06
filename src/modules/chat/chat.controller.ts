@@ -14,6 +14,7 @@ import { StoreConfigService } from '../store-config/store-config.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Chat')
 @Controller('chat')
@@ -32,12 +33,14 @@ export class ChatController {
     }
   }
 
+  @Public()
   @Post('conversations')
   @ApiOperation({ summary: 'Create a new conversation' })
   @ApiResponse({ status: 201, description: 'Conversation created' })
   async createConversation(
     @Body() data: { customerName: string; customerEmail?: string; customerId?: string },
   ) {
+    console.log('ChatController: Incoming createConversation request', data);
     await this.checkFeatureEnabled();
     return this.chatService.createConversation(data);
   }
@@ -71,6 +74,7 @@ export class ChatController {
   @Permissions('READ_CHAT')
   @ApiOperation({ summary: 'Get messages for a conversation' })
   async getMessages(@Param('id') id: string) {
+    console.log('ChatController: Fetching messages for:', id);
     return this.chatService.getMessages(id);
   }
 }

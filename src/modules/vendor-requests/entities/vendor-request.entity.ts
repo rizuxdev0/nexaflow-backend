@@ -13,6 +13,7 @@ export enum VendorRequestStatus {
   PENDING = 'pending',
   APPROVED = 'approved',
   REJECTED = 'rejected',
+  CONTACTED = 'contacted',
 }
 
 @Entity('vendor_requests')

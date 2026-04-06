@@ -13,6 +13,7 @@ export enum NotificationType {
   SYSTEM = 'system',
   INFO = 'info',
   PACK = 'pack',
+  VENDOR_REQUEST = 'vendor_request',
 }
 
 @Entity('notifications')

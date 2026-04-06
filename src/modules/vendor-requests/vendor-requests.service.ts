@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VendorRequest, VendorRequestStatus } from './entities/vendor-request.entity';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class VendorRequestsService {
   constructor(
     @InjectRepository(VendorRequest)
     private readonly vendorRequestRepository: Repository<VendorRequest>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(userId: string, data: any): Promise<VendorRequest> {
@@ -30,7 +32,20 @@ export class VendorRequestsService {
       status: VendorRequestStatus.PENDING,
     });
 
-    return await this.vendorRequestRepository.save(request);
+    const saved = await this.vendorRequestRepository.save(request);
+    
+    // Notify Admin
+    try {
+      await this.notificationsService.notifyVendorRequest(
+        saved.id, 
+        saved.storeName, 
+        saved.contactPerson || 'Un nouveau client'
+      );
+    } catch (err) {
+      console.error('Error sending vendor request notification:', err);
+    }
+
+    return saved;
   }
 
   async findAll(): Promise<VendorRequest[]> {

@@ -213,6 +213,16 @@ export class RolesService {
               'invoices.',
               'customers.',
               'reports.',
+              'marketplace.',
+              'activities.read',
+              'chat.',
+              'banners.',
+              'loyalty.',
+              'promos.',
+              'reviews.',
+              'deliveries.',
+              'stock_movements.',
+              'expenses.',
             ].some((prefix) => p.name.startsWith(prefix)),
           );
           break;
@@ -225,12 +235,13 @@ export class RolesService {
               'orders.read',
               'invoices.read',
               'customers.read',
-            ].includes(p.name),
+              'promos.read',
+            ].some((prefix) => p.name.startsWith(prefix)),
           );
           break;
         case 'customer':
           rolePermissions = permissions.filter((p) =>
-            ['shop.', 'orders.read'].some((prefix) =>
+            ['shop.', 'orders.read', 'loyalty.read', 'wishlist.'].some((prefix) =>
               p.name.startsWith(prefix),
             ),
           );

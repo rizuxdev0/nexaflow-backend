@@ -14,21 +14,29 @@ export class ChatService {
   ) {}
 
   async createConversation(data: { customerName: string; customerEmail?: string; customerId?: string }) {
+    console.log('Attempting to create/find conversation for:', data.customerName, 'ID:', data.customerId);
     // Look for an existing active conversation for this customer
     if (data.customerId) {
       const existing = await this.conversationRepo.findOne({
         where: { customerId: data.customerId, status: 'active' },
         order: { updatedAt: 'DESC' },
       });
-      if (existing) return existing;
+      if (existing) {
+        console.log('Reusing existing conversation:', existing.id);
+        return existing;
+      }
     } else if (data.customerEmail) {
       const existing = await this.conversationRepo.findOne({
         where: { customerEmail: data.customerEmail, status: 'active' },
         order: { updatedAt: 'DESC' },
       });
-      if (existing) return existing;
+      if (existing) {
+        console.log('Reusing existing conversation (via email):', existing.id);
+        return existing;
+      }
     }
 
+    console.log('Creating new conversation for:', data.customerName);
     const conversation = this.conversationRepo.create({
       ...data,
       status: 'active',
@@ -53,6 +61,7 @@ export class ChatService {
   }
 
   async saveMessage(data: { conversationId: string; content: string; senderType: 'customer' | 'admin'; senderId?: string }) {
+    console.log('Chat Service saving message for conversation:', data.conversationId);
     const message = this.messageRepo.create(data);
     const saved = await this.messageRepo.save(message);
     
@@ -62,6 +71,7 @@ export class ChatService {
       updatedAt: new Date(),
     });
 
+    console.log('Message saved successfully with ID:', saved.id);
     return saved;
   }
 
