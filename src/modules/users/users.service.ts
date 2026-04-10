@@ -9,6 +9,7 @@ import { Repository, Like, FindOptionsWhere } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from './entities/user.entity';
 import { Role } from '../roles/entities/role.entity';
+import { Permission } from '../permissions/entities/permission.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
@@ -25,6 +26,8 @@ export class UsersService {
     private usersRepository: Repository<User>,
     @InjectRepository(Role)
     private rolesRepository: Repository<Role>,
+    @InjectRepository(Permission)
+    private permissionsRepository: Repository<Permission>,
     private configService: ConfigService,
   ) {}
 
@@ -97,7 +100,19 @@ export class UsersService {
       userData.password = await bcrypt.hash(userData.password, rounds);
     }
 
-    const user = this.usersRepository.create(userData);
+    // Gérer les permissions supplémentaires
+    const extraPermissions: Permission[] = [];
+    if (createUserDto.extraPermissionIds && createUserDto.extraPermissionIds.length > 0) {
+      for (const permId of createUserDto.extraPermissionIds) {
+        const perm = await this.permissionsRepository.findOne({ where: { id: permId } });
+        if (perm) extraPermissions.push(perm);
+      }
+    }
+
+    const user = this.usersRepository.create({
+      ...userData,
+      extraPermissions,
+    });
     return await this.usersRepository.save(user);
   }
 
@@ -130,7 +145,7 @@ export class UsersService {
 
     const [data, total] = await this.usersRepository.findAndCount({
       where,
-      relations: ['role'],
+      relations: ['role', 'extraPermissions'],
       skip: (page - 1) * pageSize,
       take: pageSize,
       order: { createdAt: 'DESC' },
@@ -153,7 +168,7 @@ export class UsersService {
   ): Promise<User> {
     const relations: string[] = [];
     if (options?.withRoleAndPermissions) {
-      relations.push('role', 'role.permissions');
+      relations.push('role', 'role.permissions', 'extraPermissions');
     }
 
     const user = await this.usersRepository.findOne({
@@ -174,7 +189,7 @@ export class UsersService {
   ): Promise<User> {
     const relations: string[] = [];
     if (options?.withRoleAndPermissions) {
-      relations.push('role', 'role.permissions');
+      relations.push('role', 'role.permissions', 'extraPermissions');
     }
 
     const user = await this.usersRepository.findOne({
@@ -225,6 +240,18 @@ export class UsersService {
     if (updateUserDto.password && !updateUserDto.password.startsWith('$2')) {
       const rounds = Number(this.configService.get('BCRYPT_ROUNDS', 12));
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, rounds);
+    }
+
+    // Gérer les permissions supplémentaires si fournies
+    if (updateUserDto.extraPermissionIds) {
+      const extraPermissions: Permission[] = [];
+      if (updateUserDto.extraPermissionIds.length > 0) {
+        for (const permId of updateUserDto.extraPermissionIds) {
+          const perm = await this.permissionsRepository.findOne({ where: { id: permId } });
+          if (perm) extraPermissions.push(perm);
+        }
+      }
+      user.extraPermissions = extraPermissions;
     }
 
     Object.assign(user, updateUserDto);
@@ -290,7 +317,7 @@ export class UsersService {
     // Dans un cas réel, stocker le hash et comparer
     const users = await this.usersRepository.find({
       where: { refreshToken: refreshToken }, // À remplacer par une vraie recherche de hash
-      relations: ['role', 'role.permissions'],
+      relations: ['role', 'role.permissions', 'extraPermissions'],
     });
     return users[0] || null;
   }

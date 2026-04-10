@@ -40,6 +40,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // We assume the user is injected by the guard
     const user = (client as any).user;
     console.log('Chat message received from user:', user?.email, 'Type:', data.senderType);
+    console.log('Message Content payload:', JSON.stringify(data, null, 2));
     
     if (!user) {
       console.error('Unauthorized chat attempt - no user in socket');

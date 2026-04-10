@@ -49,6 +49,14 @@ export class CreateWarehouseDto {
   @IsString()
   @IsOptional()
   managerName?: string;
+
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
 }
 
 export class UpdateWarehouseDto extends PartialType(CreateWarehouseDto) {}

@@ -33,16 +33,24 @@ import { Category } from '../categories/entities/category.entity';
 import { Order } from '../orders/entities/order.entity';
 import { OrderItem } from '../orders/entities/order-item.entity';
 import { Customer } from '../customers/entities/customer.entity';
+import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { CustomersModule } from '../customers/customers.module';
 import { ProductsModule } from '../products/products.module';
-import { InvoicesModule } from '../invoices/invoices.module'; // ← Ajouter
+import { InvoicesModule } from '../invoices/invoices.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Product, Category, Order, OrderItem, Customer]),
+    TypeOrmModule.forFeature([
+      Product,
+      Category,
+      Order,
+      OrderItem,
+      Customer,
+      Warehouse,
+    ]),
     CustomersModule,
     ProductsModule,
-    InvoicesModule, // ← Ajouter
+    InvoicesModule,
   ],
   controllers: [ShopController],
   providers: [ShopService],

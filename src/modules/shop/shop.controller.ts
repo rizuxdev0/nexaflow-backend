@@ -160,4 +160,18 @@ export class ShopController {
     const available = await this.shopService.checkStock(productId, quantity);
     return { available, stock: 0 }; // À améliorer
   }
+
+  @Public()
+  @Get('recommend-warehouses')
+  @ApiOperation({ summary: 'Recommander des entrepôts proches selon la géolocalisation' })
+  @ApiQuery({ name: 'lat', type: Number, description: 'Latitude' })
+  @ApiQuery({ name: 'lon', type: Number, description: 'Longitude' })
+  @ApiQuery({ name: 'limit', type: Number, required: false, description: 'Nombre max de résultats' })
+  recommendWarehouses(
+    @Query('lat') lat: number,
+    @Query('lon') lon: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.shopService.recommendWarehouses(lat, lon, limit);
+  }
 }

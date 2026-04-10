@@ -1,37 +1,36 @@
-# Étape 1 : Construction de l'API
-FROM node:20-alpine AS build
+# Base image
+FROM node:20-alpine AS builder
 
+# Create app directory
 WORKDIR /app
 
-# Copie des fichiers de configuration pour la gestion des dépendances
+# Copy package files
 COPY package*.json ./
 
-# Installation de toutes les dépendances (y compris de développement pour le build)
+# Install dependencies
 RUN npm install
 
-# Copie du reste des fichiers source de l'API
+# Copy source
 COPY . .
 
-# Construction de l'API NestJS
+# Build the app
 RUN npm run build
 
-# Étape 2 : Exécution de l'API (Image légère)
+# --- Production Stage ---
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Définition des variables d'environnement par défaut
-ENV NODE_ENV=production
-
-# Copie uniquement des fichiers nécessaires à l'exécution de la production
-COPY --from=build /app/package*.json ./
-COPY --from=build /app/dist ./dist
-
-# Installation uniquement des dépendances de production pour réduire la taille de l'image
+# Copy package files and install production dependencies only
+COPY package*.json ./
 RUN npm install --only=production
 
-# Exposition du port par défaut de l'API (conformément à la config .env)
-EXPOSE 3003
+# Copy built assets from builder
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
 
-# Commande par défaut pour lancer l'API
-CMD ["node", "dist/main"]
+# Expose port
+EXPOSE 3000
+
+# Start the application
+CMD ["npm", "run", "start:prod"]

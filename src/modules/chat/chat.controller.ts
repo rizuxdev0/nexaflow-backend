@@ -13,12 +13,15 @@ import { ChatService } from './chat.service';
 import { StoreConfigService } from '../store-config/store-config.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { PlanGuard, CheckPlan } from '../../common/guards/plan.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Chat')
 @Controller('chat')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, PlanGuard)
+@CheckPlan('chat')
 export class ChatController {
   constructor(
     private readonly chatService: ChatService,
@@ -54,8 +57,7 @@ export class ChatController {
   }
 
   @Get('conversations/:id')
-  @UseGuards(PermissionsGuard)
-  @Permissions('READ_CHAT')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get one conversation with messages' })
   async getConversation(@Param('id') id: string) {
     return this.chatService.getConversation(id);
@@ -70,8 +72,7 @@ export class ChatController {
   }
 
   @Get('conversations/:id/messages')
-  @UseGuards(PermissionsGuard)
-  @Permissions('READ_CHAT')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get messages for a conversation' })
   async getMessages(@Param('id') id: string) {
     console.log('ChatController: Fetching messages for:', id);

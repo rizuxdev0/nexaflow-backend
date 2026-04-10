@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StoreConfig } from './entities/store-config.entity';
 import { UpdateStoreConfigDto } from './dto/update-store-config.dto';
+import { PLAN_QUOTAS, SubscriptionPlan } from './subscription-plans';
 
 @Injectable()
 export class StoreConfigService {
@@ -29,6 +30,10 @@ export class StoreConfigService {
     @InjectRepository(StoreConfig)
     private readonly configRepository: Repository<StoreConfig>,
   ) {}
+
+  async getPlanQuotas(plan: SubscriptionPlan) {
+    return PLAN_QUOTAS[plan];
+  }
 
   // Sanitize partners: ensure each element is a plain object, not an array or primitive
   private sanitizePartners(raw: any[]): any[] {
@@ -59,6 +64,8 @@ export class StoreConfigService {
     if (!config) {
       config = this.configRepository.create({
         id: 'default',
+        subscriptionPlan: SubscriptionPlan.STARTER,
+        subscriptionStatus: 'active',
         identity: {
           storeName: 'NexaFlow Store',
           storeSlogan: 'Votre solution de gestion innovante',
@@ -200,23 +207,29 @@ export class StoreConfigService {
       console.log('Force-syncing store configuration because changes were detected...');
       await this.configRepository.query(
         `UPDATE store_config 
-         SET identity = $1, 
-             checkout = $2, 
-             content = $3, 
-             partners = $4, 
-             features = $5, 
-             appearance = $6, 
-             security = $7,
+         SET identity = $1::jsonb, 
+             checkout = $2::jsonb, 
+             content = $3::jsonb, 
+             partners = $4::jsonb, 
+             features = $5::jsonb, 
+             appearance = $6::jsonb, 
+             security = $7::jsonb,
+             pixels = $8::jsonb,
+             seo = $9::jsonb,
+             social = $10::jsonb,
              "updatedAt" = NOW()
          WHERE id = 'default'`,
         [
-          JSON.stringify(config.identity),
-          JSON.stringify(config.checkout),
-          JSON.stringify(config.content),
-          JSON.stringify(config.partners),
-          JSON.stringify(config.features),
-          JSON.stringify(config.appearance),
-          JSON.stringify(config.security),
+          JSON.stringify(config.identity || {}),
+          JSON.stringify(config.checkout || {}),
+          JSON.stringify(config.content || {}),
+          JSON.stringify(config.partners || []),
+          JSON.stringify(config.features || []),
+          JSON.stringify(config.appearance || {}),
+          JSON.stringify(config.security || {}),
+          JSON.stringify(config.pixels || {}),
+          JSON.stringify(config.seo || {}),
+          JSON.stringify(config.social || {}),
         ],
       );
     }
@@ -237,9 +250,23 @@ export class StoreConfigService {
       config.content = { ...config.content, ...updateStoreConfigDto.content };
     }
     if (updateStoreConfigDto.partners !== undefined) {
-      console.log('Receiving partners update:', JSON.stringify(updateStoreConfigDto.partners));
-      config.partners = this.sanitizePartners(updateStoreConfigDto.partners);
-      console.log('Sanitized partners total:', config.partners.length);
+      let partnersPayload = updateStoreConfigDto.partners;
+      
+      // LOG TRÈS PRÉCIS POUR DÉBOGUER
+      console.log('--- PARTNERS UPDATE DEBUG ---');
+      console.log('Raw Payload Type:', typeof partnersPayload);
+      console.log('Is Array:', Array.isArray(partnersPayload));
+      console.log('Content JSON:', JSON.stringify(partnersPayload));
+
+      // Sécurité : si on reçoit [ [partners] ], on aplatit
+      if (Array.isArray(partnersPayload) && partnersPayload.length === 1 && Array.isArray(partnersPayload[0])) {
+        console.log('DETECTED NESTED ARRAY [[]] - Flattening...');
+        partnersPayload = partnersPayload[0];
+      }
+
+      config.partners = Array.isArray(partnersPayload) ? partnersPayload : [];
+      console.log('Final partners to save count:', config.partners.length);
+      console.log('-----------------------------');
     }
     if (updateStoreConfigDto.features) {
       const defaultFeatures = this.DEFAULT_FEATURES;
@@ -260,31 +287,44 @@ export class StoreConfigService {
       config.security = { ...config.security, ...updateStoreConfigDto.security };
     }
 
-    // 👈 FORCED SYNC: Use a more direct update method to avoid TypeORM JSONB save issues
-    // We use raw SQL to ensure Postgres receives the correct JSONB data
+    // 👈 FORCED SYNC: Use a more direct update method with explicit casts
+    // We use raw SQL with ::jsonb to ensure Postgres correctly interprets the strings
+    const debug = {
+      received: !!updateStoreConfigDto.partners,
+      count: updateStoreConfigDto.partners?.length || 0,
+      sanitized: config.partners?.length || 0,
+      timestamp: new Date().toISOString()
+    };
+
     await this.configRepository.query(
       `UPDATE store_config 
-       SET identity = $1, 
-           checkout = $2, 
-           content = $3, 
-           partners = $4, 
-           features = $5, 
-           appearance = $6, 
-           security = $7,
+       SET identity = $1::jsonb, 
+           checkout = $2::jsonb, 
+           content = $3::jsonb, 
+           partners = $4::jsonb, 
+           features = $5::jsonb, 
+           appearance = $6::jsonb, 
+           security = $7::jsonb,
+           pixels = $8::jsonb,
+           seo = $9::jsonb,
+           social = $10::jsonb,
            "updatedAt" = NOW()
        WHERE id = 'default'`,
       [
-        JSON.stringify(config.identity),
-        JSON.stringify(config.checkout),
-        JSON.stringify(config.content),
-        JSON.stringify(config.partners),
-        JSON.stringify(config.features),
-        JSON.stringify(config.appearance),
-        JSON.stringify(config.security),
+        JSON.stringify(config.identity || {}),
+        JSON.stringify(config.checkout || {}),
+        JSON.stringify(config.content || {}),
+        JSON.stringify(config.partners || []),
+        JSON.stringify(config.features || []),
+        JSON.stringify(config.appearance || {}),
+        JSON.stringify(config.security || {}),
+        JSON.stringify(config.pixels || {}),
+        JSON.stringify(config.seo || {}),
+        JSON.stringify(config.social || {}),
       ],
     );
 
-    return config;
+    return { ...config, _debug: debug } as any;
   }
 }
   

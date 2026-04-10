@@ -1,9 +1,19 @@
 import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
+import { SubscriptionPlan } from '../subscription-plans';
 
 @Entity('store_config')
 export class StoreConfig {
   @PrimaryColumn({ length: 50 })
   id: string;
+
+  @Column({ type: 'enum', enum: SubscriptionPlan, default: SubscriptionPlan.STARTER })
+  subscriptionPlan: SubscriptionPlan;
+
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionExpiresAt: Date;
+
+  @Column({ default: 'active' })
+  subscriptionStatus: 'active' | 'expired' | 'trial';
 
   @Column({ type: 'jsonb', default: {} })
   identity: any;

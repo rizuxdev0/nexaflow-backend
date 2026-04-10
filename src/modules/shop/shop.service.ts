@@ -16,9 +16,11 @@ import {
 } from '../orders/entities/order.entity';
 import { OrderItem } from '../orders/entities/order-item.entity';
 import { Customer } from '../customers/entities/customer.entity';
-import { CreateShopOrderDto } from './dto/shop-order.dto';
-import { ShopProductResponseDto } from './dto/shop-product-response.dto';
 import { ShopOrderResponseDto } from './dto/shop-order-response.dto';
+import { ShopProductResponseDto } from './dto/shop-product-response.dto';
+import { CreateShopOrderDto } from './dto/shop-order.dto';
+import { Warehouse } from '../warehouses/entities/warehouse.entity';
+import { calculateDistance } from '../../common/utils/geo.utils';
 import { CustomersService } from '../customers/customers.service';
 import { ProductsService } from '../products/products.service';
 import { InvoicesService } from '../invoices/invoices.service';
@@ -41,6 +43,8 @@ export class ShopService {
     private orderItemsRepository: Repository<OrderItem>,
     @InjectRepository(Customer)
     private customersRepository: Repository<Customer>,
+    @InjectRepository(Warehouse)
+    private warehouseRepository: Repository<Warehouse>,
     private customersService: CustomersService,
     private productsService: ProductsService,
     @Inject(forwardRef(() => InvoicesService))
@@ -497,5 +501,33 @@ export class ShopService {
     // Logique de calcul des frais de livraison
     // À implémenter selon vos besoins
     return 0; // Pour l'instant, livraison gratuite
+  }
+
+  async recommendWarehouses(lat: number, lon: number, limit: number = 3): Promise<any[]> {
+    const warehouses = await this.warehouseRepository.find({
+      where: { isActive: true },
+    });
+
+    const recommendations = warehouses
+      .map(w => {
+        const distance = calculateDistance(
+          lat,
+          lon,
+          Number(w.latitude),
+          Number(w.longitude)
+        );
+        return {
+          id: w.id,
+          name: w.name,
+          address: w.address,
+          city: w.city,
+          distance,
+        };
+      })
+      .filter(w => w.distance !== Infinity)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, limit);
+
+    return recommendations;
   }
 }

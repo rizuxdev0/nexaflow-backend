@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsPhoneNumber,
   MaxLength,
+  IsNumber,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -67,4 +68,14 @@ export class CreateCustomerDto {
   @IsOptional()
   @MaxLength(20)
   postalCode?: string;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  latitude?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  longitude?: number;
 }

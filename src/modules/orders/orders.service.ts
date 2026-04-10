@@ -14,6 +14,8 @@ import {
   SessionStatus,
 } from '../cash-sessions/entities/cash-session.entity';
 import { ProductBundle } from '../packages/entities/package.entity';
+import { Warehouse } from '../warehouses/entities/warehouse.entity';
+import { calculateDistance } from '../../common/utils/geo.utils';
 
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
@@ -48,6 +50,8 @@ export class OrdersService {
     private sessionsRepository: Repository<CashSession>,
     @InjectRepository(ProductBundle)
     private bundlesRepository: Repository<ProductBundle>,
+    @InjectRepository(Warehouse)
+    private warehouseRepository: Repository<Warehouse>,
     private dataSource: DataSource,
     private auditService: AuditService,
     private stockService: StockService,
@@ -480,6 +484,8 @@ export class OrdersService {
         customerName: createOrderDto.customerName || userName,
         customerEmail: createOrderDto.customerEmail || user?.email,
         shippingAddress: createOrderDto.shippingAddress,
+        shippingLatitude: createOrderDto.shippingLatitude,
+        shippingLongitude: createOrderDto.shippingLongitude,
         notes: createOrderDto.notes,
         orderDate: new Date(),
         statusHistory: [{ status: createOrderDto.status || OrderStatus.PENDING, timestamp: new Date() }],
@@ -839,5 +845,73 @@ export class OrdersService {
 
     const sequence = (count + 1).toString().padStart(4, '0');
     return `${prefix}-${year}${month}${day}-${sequence}`;
+  }
+
+  async crossSearch(boughtProductId: string, notBoughtProductId: string): Promise<any[]> {
+    // 1. Find all customers who bought product A
+    const buyersOfA = await this.orderItemsRepository.createQueryBuilder('oi')
+      .innerJoin('oi.order', 'o')
+      .innerJoinAndSelect('o.customer', 'c')
+      .select(['DISTINCT c.id', 'c.firstName', 'c.lastName', 'c.email', 'c.phone', 'c.totalSpent', 'c.totalOrders', 'c.loyaltyPoints'])
+      .where('oi.productId = :pidA', { pidA: boughtProductId })
+      .andWhere('o.customerId IS NOT NULL')
+      .getRawMany();
+
+    if (buyersOfA.length === 0) return [];
+
+    const idsOfA = buyersOfA.map(b => b.c_id);
+
+    // 2. Find customers among those who also bought product B
+    const buyersOfBoth = await this.orderItemsRepository.createQueryBuilder('oi')
+      .innerJoin('oi.order', 'o')
+      .select('DISTINCT o.customerId', 'customerId')
+      .where('oi.productId = :pidB', { pidB: notBoughtProductId })
+      .andWhere('o.customerId IN (:...ids)', { ids: idsOfA })
+      .getRawMany();
+
+    const idsOfBoth = new Set(buyersOfBoth.map(b => b.customerId));
+
+    // 3. Return customers who are in A but NOT in both
+    return buyersOfA
+      .filter(b => !idsOfBoth.has(b.c_id))
+      .map(b => ({
+        id: b.c_id,
+        firstName: b.c_firstName,
+        lastName: b.c_lastName,
+        email: b.c_email,
+        phone: b.c_phone,
+        totalSpent: parseFloat(b.c_totalSpent),
+        totalOrders: parseInt(b.c_totalOrders),
+        loyaltyPoints: parseInt(b.c_loyaltyPoints),
+      }));
+  }
+
+  async recommendWarehouses(lat: number, lon: number, limit: number = 3): Promise<any[]> {
+    const warehouses = await this.warehouseRepository.find({
+      where: { isActive: true },
+    });
+
+    const recommendations = warehouses
+      .map(w => {
+        const distance = calculateDistance(
+          lat,
+          lon,
+          Number(w.latitude),
+          Number(w.longitude)
+        );
+        return {
+          id: w.id,
+          name: w.name,
+          code: w.code,
+          address: w.address,
+          city: w.city,
+          distance,
+        };
+      })
+      .filter(w => w.distance !== Infinity)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, limit);
+
+    return recommendations;
   }
 }

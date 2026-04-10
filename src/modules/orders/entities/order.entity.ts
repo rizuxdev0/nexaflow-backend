@@ -64,6 +64,12 @@ export class Order {
   @Column({ nullable: true })
   shippingCountry: string;
 
+  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
+  shippingLatitude: number;
+
+  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
+  shippingLongitude: number;
+
   @Column({ nullable: true, type: 'text' })
   notes: string;
 

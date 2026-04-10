@@ -7,8 +7,11 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
 import { Role } from '../../roles/entities/role.entity';
+import { Permission } from '../../permissions/entities/permission.entity';
 import { CashSession } from '../../cash-sessions/entities/cash-session.entity';
 import { Order } from '../../orders/entities/order.entity';
 
@@ -68,6 +71,10 @@ export class User {
 
   @Column()
   roleId: string;
+  
+  @ManyToMany(() => Permission)
+  @JoinTable({ name: 'user_extra_permissions' })
+  extraPermissions: Permission[];
 
   @OneToMany(() => CashSession, (session) => session.user)
   cashSessions: CashSession[];

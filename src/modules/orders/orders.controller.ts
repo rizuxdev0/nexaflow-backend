@@ -35,6 +35,20 @@ import { Public } from '../../common/decorators/public.decorator';
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
+  @Public()
+  @Get('recommend-warehouses')
+  @ApiOperation({ summary: 'Recommander des entrepôts proches selon la géolocalisation' })
+  @ApiQuery({ name: 'lat', type: Number, description: 'Latitude' })
+  @ApiQuery({ name: 'lon', type: Number, description: 'Longitude' })
+  @ApiQuery({ name: 'limit', type: Number, required: false, description: 'Nombre max de résultats' })
+  recommendWarehouses(
+    @Query('lat') lat: number,
+    @Query('lon') lon: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.ordersService.recommendWarehouses(lat, lon, limit);
+  }
+
   @Post('pos')
   @ApiOperation({ summary: 'Créer une commande depuis le point de vente (POS)' })
   @ApiResponse({ status: 201, description: 'Commande créée avec succès' })
@@ -124,6 +138,17 @@ export class OrdersController {
   @ApiResponse({ status: 200, description: 'Liste des commandes récentes' })
   async findRecent(@Query('limit') limit?: number): Promise<Order[]> {
     return this.ordersService.findRecent(Math.min(limit || 10, 50));
+  }
+
+  @Get('cross-search')
+  @ApiOperation({ summary: 'Recherche croisée de clients (marketing ciblé)' })
+  @ApiQuery({ name: 'boughtId', description: 'ID du produit acheté' })
+  @ApiQuery({ name: 'notBoughtId', description: 'ID du produit non acheté' })
+  crossSearch(
+    @Query('boughtId') boughtId: string,
+    @Query('notBoughtId') notBoughtId: string,
+  ) {
+    return this.ordersService.crossSearch(boughtId, notBoughtId);
   }
 
   @Get(':id')

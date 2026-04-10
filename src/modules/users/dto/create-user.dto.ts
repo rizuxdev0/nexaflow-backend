@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsUUID,
   IsBoolean,
+  IsArray,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -67,4 +68,10 @@ export class CreateUserDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'IDs des permissions supplémentaires', type: [String] })
+  @IsArray()
+  @IsUUID('all', { each: true })
+  @IsOptional()
+  extraPermissionIds?: string[];
 }

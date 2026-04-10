@@ -140,4 +140,14 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   paymentStatus?: string;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  shippingLatitude?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  shippingLongitude?: number;
 }

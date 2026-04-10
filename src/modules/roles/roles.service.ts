@@ -176,6 +176,12 @@ export class RolesService {
         description: 'Boutique en ligne',
         isSystem: true,
       },
+      {
+        name: 'vendor',
+        label: 'Vendeur',
+        description: 'Vendeur Marketplace indépendant',
+        isSystem: true,
+      },
     ];
   }
 
@@ -244,6 +250,21 @@ export class RolesService {
             ['shop.', 'orders.read', 'loyalty.read', 'wishlist.'].some((prefix) =>
               p.name.startsWith(prefix),
             ),
+          );
+          break;
+        case 'vendor':
+          rolePermissions = permissions.filter((p) =>
+            [
+              'shop.',
+              'orders.',
+              'products.',
+              'marketplace.vendor', // New specific permission
+              'invoices.read',
+              'stock.read',
+              'categories.read',
+              'reviews.read',
+              'chat.',
+            ].some((prefix) => p.name.startsWith(prefix)),
           );
           break;
       }
