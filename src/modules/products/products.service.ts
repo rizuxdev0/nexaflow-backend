@@ -156,6 +156,8 @@ export class ProductsService {
     minPrice?: number,
     maxPrice?: number,
     inStock?: boolean,
+    vendorId?: string,
+    approvalStatus?: string,
   ): Promise<PaginatedResponse<ProductWithStockStatus>> {
     const where: FindOptionsWhere<Product> = {};
 
@@ -169,6 +171,14 @@ export class ProductsService {
 
     if (supplierId) {
       where.supplierId = supplierId;
+    }
+
+    if (vendorId) {
+      where.vendorId = vendorId;
+    }
+
+    if (approvalStatus) {
+      where.approvalStatus = approvalStatus as any;
     }
 
     if (isActive !== undefined) {
@@ -589,5 +599,36 @@ export class ProductsService {
     });
 
     return await this.productsRepository.save(duplicatedProduct);
+  }
+
+  async reviewVendorProduct(
+    id: string,
+    status: 'APPROVED' | 'REJECTED' | 'PENDING',
+    reason?: string,
+  ): Promise<Product> {
+    const product = await this.findOne(id);
+    product.approvalStatus = status as any;
+    product.rejectionReason = reason;
+
+    // If approved, make sure it's active
+    if (status === 'APPROVED') {
+      product.isActive = true;
+    } else {
+      product.isActive = false;
+    }
+
+    const saved = await this.productsRepository.save(product);
+
+    await this.auditService.log({
+      userName: 'Système',
+      action: AuditAction.UPDATE,
+      resource: 'Product',
+      resourceId: saved.id,
+      details: `Révision produit vendeur: ${status}${reason ? ` (Raison: ${reason})` : ''}`,
+      newData: saved,
+    });
+
+    await (this.cacheManager as any).clear();
+    return saved;
   }
 }

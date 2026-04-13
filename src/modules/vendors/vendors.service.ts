@@ -51,6 +51,20 @@ export class VendorsService {
     return vendor;
   }
 
+  async findByUser(userId: string): Promise<Vendor[]> {
+    return await this.vendorRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async findOneByUser(userId: string): Promise<Vendor | null> {
+    return await this.vendorRepository.findOne({
+      where: { userId },
+      relations: ['user'],
+    });
+  }
+
   async getStats() {
     const activeVendors = await this.vendorRepository.count({
       where: { status: VendorStatus.ACTIVE },

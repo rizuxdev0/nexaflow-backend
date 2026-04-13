@@ -16,6 +16,7 @@ import {
 import { ProductBundle } from '../packages/entities/package.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { calculateDistance } from '../../common/utils/geo.utils';
+import { Vendor } from '../vendors/entities/vendor.entity';
 
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
@@ -36,6 +37,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { CustomersService } from '../customers/customers.service';
+
+import { CommissionService } from '../vendors/commission.service';
 
 @Injectable()
 export class OrdersService {
@@ -60,6 +63,7 @@ export class OrdersService {
     private notificationsService: NotificationsService,
     private loyaltyService: LoyaltyService,
     private customersService: CustomersService,
+    private commissionService: CommissionService,
   ) {}
 
   //   async createPosOrder(
@@ -340,6 +344,13 @@ export class OrdersService {
 
       // 8. Créer les items et décrémenter le stock
       for (const item of items) {
+        // Calculate Marketplace Commission
+        const commission = await this.commissionService.calculateCommission(
+          item.product.vendorId,
+          item.product.categoryId,
+          item.unitPrice * item.quantity
+        );
+
         const orderItem = this.orderItemsRepository.create({
           orderId: savedOrder.id,
           productId: item.productId,
@@ -351,6 +362,8 @@ export class OrdersService {
           totalPrice: item.unitPrice * item.quantity,
           taxRate,
           taxAmount: Math.round(item.unitPrice * item.quantity * taxRate),
+          commissionRate: commission.rate,
+          commissionAmount: commission.amount,
         });
         const savedItem = await queryRunner.manager.save(orderItem);
         savedItems.push(savedItem);
@@ -501,6 +514,13 @@ export class OrdersService {
 
       // 4. Create items and handle stock
       for (const item of items) {
+        // Calculate Marketplace Commission
+        const commission = await this.commissionService.calculateCommission(
+          item.product.vendorId,
+          item.product.categoryId,
+          item.unitPrice * item.quantity
+        );
+
         const orderItem = this.orderItemsRepository.create({
           orderId: savedOrder.id,
           productId: item.productId,
@@ -512,6 +532,8 @@ export class OrdersService {
           totalPrice: item.unitPrice * item.quantity,
           taxRate,
           taxAmount: Math.round(item.unitPrice * item.quantity * taxRate),
+          commissionRate: commission.rate,
+          commissionAmount: commission.amount,
         });
         await queryRunner.manager.save(orderItem);
 
@@ -615,6 +637,35 @@ export class OrdersService {
     }
 
     return { items: calculatedItems, subtotal };
+  }
+
+  async finalizeVendorCommissions(orderId: string) {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['items', 'items.product']
+    });
+
+    if (!order || order.status !== OrderStatus.COMPLETED) return;
+
+    for (const item of order.items) {
+      if (item.productId && item.commissionAmount > 0) {
+        const product = await this.productsRepository.findOne({ where: { id: item.productId } });
+        if (product && product.vendorId) {
+          const vendor = await this.dataSource.manager.findOne(Vendor, { where: { id: product.vendorId } });
+          if (vendor) {
+            // Net for vendor = total price - commission
+            const netAmount = Number(item.totalPrice) - Number(item.commissionAmount);
+            
+            vendor.balance = Number(vendor.balance) + netAmount;
+            vendor.totalRevenue = Number(vendor.totalRevenue) + netAmount;
+            vendor.totalCommission = Number(vendor.totalCommission) + Number(item.commissionAmount);
+            vendor.totalOrders += 1;
+            
+            await this.dataSource.manager.save(vendor);
+          }
+        }
+      }
+    }
   }
 
   private async processLoyalty(order: Order) {
@@ -815,6 +866,11 @@ export class OrdersService {
     }
 
     const saved = await this.ordersRepository.save(order);
+
+    // MARKETPLACE: Finalize vendor commissions if completed
+    if (status === OrderStatus.COMPLETED) {
+      await this.finalizeVendorCommissions(id);
+    }
 
     // FIDÉLITÉ: Gain de points si paiement complété
     await this.processLoyalty(saved);

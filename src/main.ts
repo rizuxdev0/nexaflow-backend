@@ -313,9 +313,10 @@ async function bootstrap() {
 
   // ============ START SERVER ============
 
-  await app.listen(port || process.env.PORT);
-  console.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
-  console.log(`📚 Swagger documentation: http://localhost:${port}/api/v1/docs`);
+  const listenPort = process.env.PORT || port;
+  await app.listen(listenPort);
+  console.log(`🚀 Application is running on: http://localhost:${listenPort}/api/v1`);
+  console.log(`📚 Swagger documentation: http://localhost:${listenPort}/api/v1/docs`);
   console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🕐 Documentation generated: ${new Date().toLocaleString()}`);
 }

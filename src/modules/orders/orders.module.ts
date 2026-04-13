@@ -13,6 +13,7 @@ import { ProductBundle } from '../packages/entities/package.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { CustomersModule } from '../customers/customers.module';
+import { VendorsModule } from '../vendors/vendors.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { CustomersModule } from '../customers/customers.module';
     StockModule,
     LoyaltyModule,
     CustomersModule,
+    VendorsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

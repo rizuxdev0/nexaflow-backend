@@ -10,7 +10,11 @@ import {
   HttpStatus,
   HttpCode,
   Put,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/common/guards/roles.guard';
+import { PermissionsGuard } from 'src/common/guards/permissions.guard';
 import {
   ApiTags,
   ApiOperation,
@@ -31,10 +35,12 @@ import { VariantResponseDto } from './dto/variant-response.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { Permissions } from 'src/common/decorators/permissions.decorator';
+import { Public } from 'src/common/decorators/public.decorator';
 
 @ApiTags('products')
-@Controller('products')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@Controller('products')
 export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
@@ -43,6 +49,7 @@ export class ProductsController {
 
   // ============ ENDPOINTS POUR PRODUITS ============
   @Post()
+  @Permissions('products.create')
   @ApiOperation({ summary: 'Créer un nouveau produit' })
   @ApiResponse({ status: 201, description: 'Produit créé avec succès' })
   @ApiResponse({ status: 409, description: 'SKU ou slug déjà existant' })
@@ -52,6 +59,7 @@ export class ProductsController {
   }
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'Liste paginée des produits' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
@@ -81,6 +89,7 @@ export class ProductsController {
   }
 
   @Get('featured')
+  @Public()
   @ApiOperation({ summary: 'Produits en vedette' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Liste des produits en vedette' })
@@ -107,6 +116,7 @@ export class ProductsController {
   }
 
   @Get('category/:categoryId')
+  @Public()
   @ApiOperation({ summary: 'Produits par catégorie' })
   @ApiParam({ name: 'categoryId', description: 'ID de la catégorie' })
   @ApiResponse({
@@ -118,6 +128,7 @@ export class ProductsController {
   }
 
   @Get('supplier/:supplierId')
+  @Public()
   @ApiOperation({ summary: 'Produits par fournisseur' })
   @ApiParam({ name: 'supplierId', description: 'ID du fournisseur' })
   @ApiResponse({
@@ -129,6 +140,7 @@ export class ProductsController {
   }
 
   @Get('search')
+  @Public()
   @ApiOperation({ summary: 'Rechercher des produits' })
   @ApiQuery({ name: 'q', required: true, type: String })
   @ApiResponse({ status: 200, description: 'Résultats de la recherche' })
@@ -137,6 +149,7 @@ export class ProductsController {
   }
 
   @Get('best-sellers')
+  @Public()
   @ApiOperation({ summary: 'Meilleures ventes' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Liste des meilleures ventes' })
@@ -145,6 +158,7 @@ export class ProductsController {
   }
 
   @Get('recommended')
+  @Public()
   @ApiOperation({ summary: 'Produits recommandés' })
   @ApiQuery({ name: 'productId', required: false, type: String })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -157,6 +171,7 @@ export class ProductsController {
   }
 
   @Get('sku/:sku')
+  @Public()
   @ApiOperation({ summary: "Détail d'un produit par SKU" })
   @ApiParam({ name: 'sku', description: 'SKU du produit' })
   @ApiResponse({ status: 200, description: 'Produit trouvé' })
@@ -166,6 +181,7 @@ export class ProductsController {
   }
 
   @Get('slug/:slug')
+  @Public()
   @ApiOperation({ summary: "Détail d'un produit par slug" })
   @ApiParam({ name: 'slug', description: 'Slug du produit' })
   @ApiResponse({ status: 200, description: 'Produit trouvé' })
@@ -175,6 +191,7 @@ export class ProductsController {
   }
 
   @Get(':id')
+  @Public()
   @ApiOperation({ summary: "Détail d'un produit" })
   @ApiParam({ name: 'id', description: 'ID du produit' })
   @ApiResponse({ status: 200, description: 'Produit trouvé' })

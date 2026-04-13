@@ -11,6 +11,14 @@ import {
 import { Category } from '../../categories/entities/category.entity';
 import { Supplier } from '../../suppliers/entities/supplier.entity';
 import { ProductVariant } from './product-variant.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
+
+export enum ProductApprovalStatus {
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+  DRAFT = 'draft',
+}
 
 @Entity('products')
 export class Product {
@@ -124,6 +132,23 @@ export class Product {
 
   @OneToMany(() => ProductVariant, (variant) => variant.product)
   variants: ProductVariant[];
+
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
+
+  @Column({
+    type: 'enum',
+    enum: ProductApprovalStatus,
+    default: ProductApprovalStatus.APPROVED, // Default to approved for legacy internal products
+  })
+  approvalStatus: ProductApprovalStatus;
+
+  @Column({ type: 'text', nullable: true })
+  rejectionReason: string;
 
   @CreateDateColumn()
   createdAt: Date;

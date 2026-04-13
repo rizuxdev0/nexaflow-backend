@@ -55,9 +55,13 @@ export class NotificationsController {
     return this.notificationService.markRead(id);
   }
 
-  @Post('read-all')
-  markAllRead(@CurrentUser('id') userId: string) {
-    return this.notificationService.markAllRead(userId);
+  @Post('mark-all-read')
+  markAllRead(@CurrentUser() user: any) {
+    const isCustomer = user.role?.name === 'customer' || user.role === 'customer';
+    if (isCustomer) {
+      return this.notificationService.markAllRead(undefined, user.id);
+    }
+    return this.notificationService.markAllRead(user.id);
   }
 
   @Delete(':id')

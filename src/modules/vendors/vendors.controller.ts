@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import { VendorsService } from './vendors.service';
 import { VendorStatus } from './entities/vendor.entity';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -13,6 +13,12 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @Controller('vendors')
 export class VendorsController {
   constructor(private readonly vendorsService: VendorsService) {}
+
+  @Get('me')
+  @ApiOperation({ summary: 'Mon profil vendeur' })
+  findMe(@Request() req: any) {
+    return this.vendorsService.findOneByUser(req.user.id);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Liste des vendeurs' })

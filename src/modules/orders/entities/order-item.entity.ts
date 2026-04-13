@@ -55,6 +55,12 @@ export class OrderItem {
   @Column({ type: 'decimal', precision: 10, scale: 0, default: 0 })
   taxAmount: number;
 
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  commissionRate: number;
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  commissionAmount: number;
+
   @CreateDateColumn()
   createdAt: Date;
 }
