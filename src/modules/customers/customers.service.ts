@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, FindOptionsWhere } from 'typeorm';
+import { Repository, Like, FindOptionsWhere, Brackets } from 'typeorm';
 import { Customer } from './entities/customer.entity';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -44,26 +44,56 @@ export class CustomersService {
     search?: string,
     isActive?: boolean,
   ): Promise<PaginatedResponse<Customer>> {
-    const where: FindOptionsWhere<Customer> = {};
+    const queryBuilder = this.customersRepository.createQueryBuilder('customer');
 
     if (search) {
-      where.firstName = Like(`%${search}%`);
-      // Note: Pour une recherche plus avancée, utilisez QueryBuilder
+      queryBuilder.andWhere(
+        new Brackets((qb) => {
+          qb.where('customer.firstName ILIKE :search', { search: `%${search}%` })
+            .orWhere('customer.lastName ILIKE :search', { search: `%${search}%` })
+            .orWhere('customer.email ILIKE :search', { search: `%${search}%` });
+        }),
+      );
     }
 
     if (isActive !== undefined) {
-      where.isActive = isActive;
+      queryBuilder.andWhere('customer.isActive = :isActive', { isActive });
     }
 
-    const [data, total] = await this.customersRepository.findAndCount({
-      where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      order: { createdAt: 'DESC' },
-      relations: ['orders'],
-    });
+    queryBuilder
+      .orderBy('customer.createdAt', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .leftJoinAndSelect('customer.orders', 'orders');
+
+    const [data, total] = await queryBuilder.getManyAndCount();
 
     return PaginatedResponseBuilder.build(data, total, page, pageSize);
+  }
+
+  async getTopLoyalCustomers(limit: number = 10): Promise<Customer[]> {
+    return this.customersRepository.find({
+      order: { loyaltyPoints: 'DESC' },
+      take: limit,
+    });
+  }
+
+  async getLoyaltyStats() {
+    return this.customersRepository
+      .createQueryBuilder('customer')
+      .select('SUM(customer.loyaltyPoints)', 'totalPoints')
+      .addSelect('AVG(customer.loyaltyPoints)', 'averagePoints')
+      .addSelect('COUNT(customer.id)', 'totalMembers')
+      .getRawOne();
+  }
+
+  async getTierDistribution() {
+    return this.customersRepository
+      .createQueryBuilder('customer')
+      .select('customer.loyaltyTier', 'loyaltyTier')
+      .addSelect('COUNT(customer.id)', 'count')
+      .groupBy('customer.loyaltyTier')
+      .getRawMany();
   }
 
   async findOne(id: string): Promise<Customer> {
@@ -149,6 +179,7 @@ export class CustomersService {
         break;
       case PointsOperation.ADD:
         newPoints = customer.loyaltyPoints + updatePointsDto.points;
+        customer.lifetimePoints = (customer.lifetimePoints || 0) + updatePointsDto.points;
         break;
       case PointsOperation.REMOVE:
         if (customer.loyaltyPoints < updatePointsDto.points) {
@@ -165,6 +196,21 @@ export class CustomersService {
     }
 
     customer.loyaltyPoints = newPoints;
+
+    const tiers = [
+      { tier: 'bronze', minPoints: 0 },
+      { tier: 'silver', minPoints: 500 },
+      { tier: 'gold', minPoints: 2000 },
+      { tier: 'platinum', minPoints: 5000 },
+    ];
+    let currentTier = 'bronze';
+    for (const t of tiers) {
+      if ((customer.lifetimePoints || 0) >= t.minPoints) {
+        currentTier = t.tier;
+      }
+    }
+    customer.loyaltyTier = currentTier;
+
     return await this.customersRepository.save(customer);
   }
 
@@ -190,10 +236,6 @@ export class CustomersService {
     customer.totalOrders += 1;
     customer.totalSpent = Number(customer.totalSpent) + orderAmount;
     customer.lastOrderDate = new Date();
-
-    // Ajouter des points fidélité (1 point pour 1000 FCFA)
-    const pointsToAdd = Math.floor(orderAmount / 1000);
-    customer.loyaltyPoints += pointsToAdd;
 
     return await this.customersRepository.save(customer);
   }
@@ -222,6 +264,7 @@ export class CustomersService {
         phone: customerData?.phone,
         address: customerData?.address,
         city: customerData?.city,
+        source: customerData?.source || 'pos',
       });
     }
   }
@@ -241,12 +284,20 @@ export class CustomersService {
       .select('AVG(customer.totalSpent)', 'avgSpent')
       .getRawOne();
 
+    const bySource = await this.customersRepository
+      .createQueryBuilder('customer')
+      .select('customer.source', 'source')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('customer.source')
+      .getRawMany();
+
     return {
       total,
       active,
       inactive,
       topRevenue,
       avgSpent: Math.round(Number(result?.avgSpent || 0)),
+      bySource,
     };
   }
 }

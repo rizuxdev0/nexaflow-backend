@@ -8,7 +8,9 @@ import {
   HttpStatus,
   HttpCode,
   SetMetadata,
+  UseInterceptors,
 } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { Public } from '../../common/decorators/public.decorator';
 import {
   ApiTags,
@@ -27,6 +29,8 @@ import { PaginatedResponse } from '../../common/interfaces/paginated-response.in
 
 @ApiTags('shop')
 @Controller('shop')
+@UseInterceptors(CacheInterceptor)
+@CacheTTL(3600) // 1 heure par défaut pour la boutique
 export class ShopController {
   constructor(private readonly shopService: ShopService) {}
 
@@ -64,6 +68,7 @@ export class ShopController {
     );
   }
 
+  @Public()
   @Get('products/featured')
   @ApiOperation({ summary: 'Produits en vedette' })
   @ApiResponse({ status: 200, description: 'Liste des produits vedettes' })
@@ -113,6 +118,7 @@ export class ShopController {
 
   // ============ COMMANDES E-COMMERCE ============
 
+  @Public()
   @Post('orders')
   @ApiOperation({ summary: 'Passer une commande' })
   @ApiResponse({ status: 201, description: 'Commande créée avec succès' })
@@ -124,6 +130,7 @@ export class ShopController {
     return this.shopService.createShopOrder(createOrderDto);
   }
 
+  @Public()
   @Get('orders/:orderNumber')
   @ApiOperation({ summary: 'Suivre une commande' })
   @ApiParam({ name: 'orderNumber', description: 'Numéro de commande' })

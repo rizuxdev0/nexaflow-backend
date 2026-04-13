@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Body, Query, UseGuards, Req } from '@nestjs/common';
 import { CustomerEventsService } from './customer-events.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Public } from '../../common/decorators/public.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 import type { Request } from 'express';
 
+@Public()
 @Controller('customer-events')
 export class CustomerEventsController {
   constructor(private readonly eventsService: CustomerEventsService) {}
@@ -19,7 +22,8 @@ export class CustomerEventsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @Roles('admin', 'manager')
+  @Permissions('audit.read')
   async findAll(
     @Query('page') page: number = 1,
     @Query('pageSize') pageSize: number = 50,
@@ -30,7 +34,8 @@ export class CustomerEventsController {
   }
 
   @Get('stats')
-  @UseGuards(JwtAuthGuard)
+  @Roles('admin', 'manager')
+  @Permissions('audit.read')
   async getStats() {
     return await this.eventsService.getStats();
   }

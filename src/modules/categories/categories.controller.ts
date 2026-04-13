@@ -26,6 +26,8 @@ import { Category } from './entities/category.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 
+import { Public } from '../../common/decorators/public.decorator';
+
 @ApiTags('categories')
 @Controller('categories')
 @ApiBearerAuth()
@@ -41,6 +43,7 @@ export class CategoriesController {
     return this.categoriesService.create(createCategoryDto);
   }
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'Liste paginée des catégories' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -57,6 +60,7 @@ export class CategoriesController {
     );
   }
 
+  @Public()
   @Get('flat')
   @ApiOperation({ summary: 'Liste plate de toutes les catégories actives (pour dropdowns)' })
   @ApiResponse({ status: 200, description: 'Liste des catégories actives' })
@@ -64,6 +68,7 @@ export class CategoriesController {
     return this.categoriesService.findAllFlat();
   }
 
+  @Public()
   @Get('tree')
   @ApiOperation({ summary: 'Arborescence complète des catégories' })
   @ApiResponse({ status: 200, description: 'Arborescence des catégories' })
@@ -71,6 +76,7 @@ export class CategoriesController {
     return this.categoriesService.getCategoryTree();
   }
 
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: "Détail d'une catégorie" })
   @ApiParam({ name: 'id', description: 'ID de la catégorie' })
@@ -80,6 +86,7 @@ export class CategoriesController {
     return this.categoriesService.findOne(id);
   }
 
+  @Public()
   @Get('slug/:slug')
   @ApiOperation({ summary: "Détail d'une catégorie par son slug" })
   @ApiParam({ name: 'slug', description: 'Slug de la catégorie' })

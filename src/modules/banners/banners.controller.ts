@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Put, Param, Delete, Patch, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete, Patch, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BannersService } from './banners.service';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -33,6 +34,8 @@ export class BannersController {
 
   @Public()
   @Get('active')
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(3600)
   getActive(@Query('position') position?: string) {
     return this.bannersService.getActive(position);
   }

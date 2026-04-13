@@ -34,6 +34,8 @@ import { StockService } from '../stock/stock.service';
 import { StockMovementType } from '../stock/entities/stock-movement.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/entities/notification.entity';
+import { LoyaltyService } from '../loyalty/loyalty.service';
+import { CustomersService } from '../customers/customers.service';
 
 @Injectable()
 export class OrdersService {
@@ -56,6 +58,8 @@ export class OrdersService {
     private auditService: AuditService,
     private stockService: StockService,
     private notificationsService: NotificationsService,
+    private loyaltyService: LoyaltyService,
+    private customersService: CustomersService,
   ) {}
 
   //   async createPosOrder(
@@ -426,6 +430,8 @@ export class OrdersService {
         link: `/admin/orders`
       });
 
+      await this.processLoyalty(savedOrder);
+
       await queryRunner.commitTransaction();
 
       return {
@@ -541,6 +547,8 @@ export class OrdersService {
         link: `/admin/orders`
       });
 
+      await this.processLoyalty(savedOrder);
+
       await queryRunner.commitTransaction();
       return this.findOne(savedOrder.id);
     } catch (error) {
@@ -607,6 +615,32 @@ export class OrdersService {
     }
 
     return { items: calculatedItems, subtotal };
+  }
+
+  private async processLoyalty(order: Order) {
+    if (order.customerId && order.paymentStatus === PaymentStatus.PAID) {
+      try {
+        // Éviter le double comptage
+        const alreadyEarned = await this.loyaltyService.hasEarnedPoints(order.id);
+        if (alreadyEarned) return;
+
+        // Mettre à jour les statistiques globales du client
+        await this.customersService.updateCustomerStats(order.customerId, order.total);
+        
+        // Gain de points selon le multiplicateur du rang
+        const points = await this.loyaltyService.calculateEarnedPoints(order.customerId, order.total);
+        
+        if (points > 0) {
+          await this.loyaltyService.earnPoints({
+            customerId: order.customerId,
+            points,
+            orderId: order.id,
+          });
+        }
+      } catch (error) {
+        console.error(`Loyalty error [Order ${order.id}]:`, error);
+      }
+    }
   }
 
   async findAll(
@@ -781,6 +815,9 @@ export class OrdersService {
     }
 
     const saved = await this.ordersRepository.save(order);
+
+    // FIDÉLITÉ: Gain de points si paiement complété
+    await this.processLoyalty(saved);
 
     await this.auditService.log({
       userId,

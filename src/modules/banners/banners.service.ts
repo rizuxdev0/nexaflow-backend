@@ -1,4 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual, MoreThanOrEqual, IsNull, Brackets } from 'typeorm';
 import { Banner } from './entities/banner.entity';
@@ -10,11 +12,14 @@ export class BannersService {
   constructor(
     @InjectRepository(Banner)
     private readonly bannerRepository: Repository<Banner>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async create(createBannerDto: CreateBannerDto): Promise<Banner> {
     const banner = this.bannerRepository.create(createBannerDto);
-    return this.bannerRepository.save(banner);
+    const saved = await this.bannerRepository.save(banner);
+    await (this.cacheManager as any).clear();
+    return saved;
   }
 
   async findAll(): Promise<Banner[]> {
@@ -57,17 +62,22 @@ export class BannersService {
   async update(id: string, updateBannerDto: UpdateBannerDto): Promise<Banner> {
     const banner = await this.findOne(id);
     Object.assign(banner, updateBannerDto);
-    return this.bannerRepository.save(banner);
+    const saved = await this.bannerRepository.save(banner);
+    await (this.cacheManager as any).clear();
+    return saved;
   }
 
   async remove(id: string): Promise<void> {
     const banner = await this.findOne(id);
     await this.bannerRepository.remove(banner);
+    await (this.cacheManager as any).clear();
   }
 
   async toggleActive(id: string): Promise<Banner> {
     const banner = await this.findOne(id);
     banner.isActive = !banner.isActive;
-    return this.bannerRepository.save(banner);
+    const saved = await this.bannerRepository.save(banner);
+    await (this.cacheManager as any).clear();
+    return saved;
   }
 }

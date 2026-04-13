@@ -78,4 +78,9 @@ export class CreateCustomerDto {
   @IsNumber()
   @IsOptional()
   longitude?: number;
+
+  @ApiPropertyOptional({ description: 'Source du client', enum: ['pos', 'ecommerce'], default: 'pos' })
+  @IsString()
+  @IsOptional()
+  source?: string;
 }

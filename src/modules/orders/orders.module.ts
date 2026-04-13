@@ -11,6 +11,8 @@ import { AuditModule } from '../audit/audit.module';
 import { StockModule } from '../stock/stock.module';
 import { ProductBundle } from '../packages/entities/package.entity';
 import { Warehouse } from '../warehouses/entities/warehouse.entity';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { CustomersModule } from '../customers/customers.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { Warehouse } from '../warehouses/entities/warehouse.entity';
     ]),
     AuditModule,
     StockModule,
+    LoyaltyModule,
+    CustomersModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

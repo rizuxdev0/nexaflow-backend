@@ -17,13 +17,13 @@ export class PackagesController {
   constructor(private readonly packagesService: PackagesService) {}
 
   @Get()
-  @Permissions('promos.read')
+  @Public()
   findAll(@Query() query: any) {
     return this.packagesService.findAll(query);
   }
 
   @Get(':id')
-  @Permissions('promos.read')
+  @Public()
   findOne(@Param('id') id: string) {
     return this.packagesService.findOne(id);
   }

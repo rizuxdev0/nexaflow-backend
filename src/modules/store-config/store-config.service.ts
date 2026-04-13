@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { StoreConfig } from './entities/store-config.entity';
@@ -29,6 +31,7 @@ export class StoreConfigService {
   constructor(
     @InjectRepository(StoreConfig)
     private readonly configRepository: Repository<StoreConfig>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   async getPlanQuotas(plan: SubscriptionPlan) {
@@ -108,7 +111,9 @@ export class StoreConfigService {
           passwordPolicy: defaultPasswordPolicy
         }
       });
-      return this.configRepository.save(config);
+      const saved = await this.configRepository.save(config);
+      await (this.cacheManager as any).clear();
+      return saved;
     }
 
     // Upgrade & Integrity logic: ensure all required fields exist
@@ -232,6 +237,7 @@ export class StoreConfigService {
           JSON.stringify(config.social || {}),
         ],
       );
+      await (this.cacheManager as any).clear();
     }
     
     return config;
@@ -323,6 +329,8 @@ export class StoreConfigService {
         JSON.stringify(config.social || {}),
       ],
     );
+    
+    await (this.cacheManager as any).clear();
 
     return { ...config, _debug: debug } as any;
   }

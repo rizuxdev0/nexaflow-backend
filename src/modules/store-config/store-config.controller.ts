@@ -1,4 +1,5 @@
-import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Body, UseGuards, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor, CacheTTL } from '@nestjs/cache-manager';
 import { StoreConfigService } from './store-config.service';
 import { UpdateStoreConfigDto } from './dto/update-store-config.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -19,6 +20,8 @@ export class StoreConfigController {
 
   @Public()
   @Get()
+  @UseInterceptors(CacheInterceptor)
+  @CacheTTL(3600)
   get() {
     return this.storeConfigService.get();
   }

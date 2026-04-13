@@ -9,6 +9,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { CustomersService } from '../customers/customers.service';
 
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -17,7 +19,16 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagg
 @Controller('loyalty')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class LoyaltyController {
-  constructor(private readonly loyaltyService: LoyaltyService) {}
+  constructor(
+    private readonly loyaltyService: LoyaltyService,
+    private readonly customersService: CustomersService
+  ) {}
+
+  @Get('stats')
+  @Roles('admin', 'manager')
+  getStats() {
+    return this.loyaltyService.getStats();
+  }
 
   @Public()
   @Get('config')
@@ -32,8 +43,7 @@ export class LoyaltyController {
   }
 
   @Get('rewards')
-  @Roles('admin', 'manager')
-  @Permissions('loyalty.read')
+  @Public() // Tout le monde peut voir les récompenses disponibles
   getRewards(@Query('page') page: string, @Query('pageSize') pageSize: string) {
     return this.loyaltyService.getRewards(+page || 1, +pageSize || 20);
   }
@@ -53,14 +63,28 @@ export class LoyaltyController {
   }
 
   @Get('transactions')
-  @Roles('admin', 'manager')
-  @Permissions('loyalty.read')
-  getTransactions(
+  @Roles('admin', 'manager', 'customer')
+  async getTransactions(
     @Query('page') page: string, 
     @Query('pageSize') pageSize: string,
+    @CurrentUser() user: any,
     @Query('customerId') customerId?: string
   ) {
-    return this.loyaltyService.getTransactions(customerId, +page || 1, +pageSize || 20);
+    let targetId = customerId;
+
+    // Si c'est un client, on cherche son ID de client via son email
+    if (user.role?.name === 'customer') {
+      try {
+        const customer = await this.customersService.findByEmail(user.email);
+        targetId = customer.id;
+      } catch (error) {
+        // Si le client n'existe pas encore en base (pas de commande), 
+        // on retourne une liste vide au lieu d'une erreur
+        return { data: [], total: 0, page: +page || 1, pageSize: +pageSize || 20, totalPages: 0 };
+      }
+    }
+
+    return this.loyaltyService.getTransactions(targetId, +page || 1, +pageSize || 20);
   }
 
   @Post('earn')

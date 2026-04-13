@@ -52,6 +52,15 @@ export class Customer {
   @Column({ default: 0 })
   loyaltyPoints: number;
 
+  @Column({ default: 0 })
+  lifetimePoints: number;
+
+  @Column({ default: 'bronze' })
+  loyaltyTier: string;
+
+  @Column({ default: 'pos' })
+  source: string; // 'pos' or 'ecommerce'
+
   @Column({ default: true })
   isActive: boolean;
 

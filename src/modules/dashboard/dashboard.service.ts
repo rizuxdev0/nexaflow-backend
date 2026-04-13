@@ -109,14 +109,17 @@ export class DashboardService {
   async getTopProducts(limit = 5) {
     const raw = await this.itemsRepo
       .createQueryBuilder('oi')
+      .leftJoin('oi.product', 'p')
       .select('oi.productId', 'productId')
       .addSelect('oi.productName', 'productName')
       .addSelect('SUM(oi.quantity)', 'totalSold')
       .addSelect('SUM(oi.totalPrice)', 'revenue')
+      .addSelect('p.images', 'images')
       .innerJoin('oi.order', 'o')
       .where("o.paymentStatus = 'paid'")
       .groupBy('oi.productId')
       .addGroupBy('oi.productName')
+      .addGroupBy('p.images')
       .orderBy('revenue', 'DESC')
       .limit(limit)
       .getRawMany();
@@ -126,21 +129,20 @@ export class DashboardService {
       productName: r.productName,
       totalSold: parseInt(r.totalSold || '0', 10),
       revenue: parseFloat(r.revenue || '0'),
+      image: r.images && r.images.length > 0 ? r.images[0] : null,
     }));
   }
 
   async getRevenueByCategory() {
     const raw = await this.itemsRepo
       .createQueryBuilder('oi')
-      .select('p.categoryId', 'categoryId')
-      .addSelect('c.name', 'categoryName')
+      .leftJoin('oi.product', 'p')
+      .leftJoin('p.category', 'c')
+      .select('c.name', 'categoryName')
       .addSelect('SUM(oi.totalPrice)', 'revenue')
       .innerJoin('oi.order', 'o')
-      .innerJoin('products', 'p', 'p.id = oi."productId"')
-      .leftJoin('categories', 'c', 'c.id = p."categoryId"')
       .where("o.paymentStatus = 'paid'")
-      .groupBy('p.categoryId')
-      .addGroupBy('c.name')
+      .groupBy('c.name')
       .orderBy('revenue', 'DESC')
       .getRawMany();
 

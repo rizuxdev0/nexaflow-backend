@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 
 import { AppController } from './app.controller';
@@ -19,6 +19,8 @@ import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module
 import { InvoicesModule } from './modules/invoices/invoices.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ShopModule } from './modules/shop/shop.module';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
 import { AuthModule } from './modules/auth/auth.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { UsersController } from './modules/users/users.controller';
@@ -77,6 +79,35 @@ import { CustomerEventsModule } from './modules/customer-events/customer-events.
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '.env.development', '.env.production'],
+    }),
+
+    CacheModule.registerAsync({
+      isGlobal: true,
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => {
+        const redisHost = configService.get('REDIS_HOST');
+        
+        // Si REDIS_HOST n'est pas configuré, on utilise le cache en mémoire (évite les plantages)
+        if (!redisHost || redisHost === 'none') {
+          return { store: 'memory', ttl: 3600 };
+        }
+
+        try {
+          return {
+            store: await redisStore({
+              socket: {
+                host: redisHost,
+                port: parseInt(configService.get('REDIS_PORT', '6379')),
+              },
+              ttl: parseInt(configService.get('REDIS_TTL', '3600')),
+            }),
+          };
+        } catch (error) {
+          console.error('Redis initialization failed, falling back to memory store.');
+          return { store: 'memory', ttl: 3600 };
+        }
+      },
     }),
 
     ThrottlerModule.forRoot([
@@ -162,10 +193,6 @@ import { CustomerEventsModule } from './modules/customer-events/customer-events.
     },
 
     { provide: APP_GUARD, useClass: RolesGuard },
-    {
-      provide: APP_GUARD,
-      useClass: RolesGuard, // Vérifie les rôles
-    },
     {
       provide: APP_GUARD,
       useClass: PermissionsGuard, // Vérifie les permissions

@@ -3,7 +3,10 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, FindOptionsWhere, Between } from 'typeorm';
 import { Product } from './entities/product.entity';
@@ -37,6 +40,7 @@ export class ProductsService {
     private suppliersService: SuppliersService,
     private stockService: StockService,
     private auditService: AuditService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   private generateSlug(name: string): string {
@@ -137,6 +141,7 @@ export class ProductsService {
       newData: savedProduct,
     });
 
+    await (this.cacheManager as any).clear();
     return savedProduct;
   }
 
@@ -329,6 +334,7 @@ export class ProductsService {
       newData: updatedProduct,
     });
 
+    await (this.cacheManager as any).clear();
     return updatedProduct;
   }
 
@@ -378,18 +384,23 @@ export class ProductsService {
         throw error;
       }
     }
+    await (this.cacheManager as any).clear();
   }
 
   async toggleStatus(id: string): Promise<Product> {
     const product = await this.findOne(id);
     product.isActive = !product.isActive;
-    return await this.productsRepository.save(product);
+    const saved = await this.productsRepository.save(product);
+    await (this.cacheManager as any).clear();
+    return saved;
   }
 
   async toggleFeatured(id: string): Promise<Product> {
     const product = await this.findOne(id);
     product.isFeatured = !product.isFeatured;
-    return await this.productsRepository.save(product);
+    const saved = await this.productsRepository.save(product);
+    await (this.cacheManager as any).clear();
+    return saved;
   }
 
   async updateStock(
@@ -429,6 +440,7 @@ export class ProductsService {
       allowNegative: updateStockDto.allowNegative,
     });
 
+    await (this.cacheManager as any).clear();
     return await this.findOne(id);
   }
 

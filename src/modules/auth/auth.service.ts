@@ -25,6 +25,7 @@ import { ProductsService } from '../products/products.service';
 import { CategoriesService } from '../categories/categories.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { StoreConfigService } from '../store-config/store-config.service';
+import { CustomersService } from '../customers/customers.service';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -38,6 +39,7 @@ export class AuthService implements OnModuleInit {
     private jwtService: JwtService,
     private configService: ConfigService,
     private storeConfigService: StoreConfigService,
+    private customersService: CustomersService,
   ) {}
 
   async onModuleInit() {
@@ -173,7 +175,20 @@ export class AuthService implements OnModuleInit {
       emailVerificationToken,
     });
 
-    // 6. TODO: Envoyer l'email de vérification
+    // 6. Créer également l'entrée dans la table Customers (Synchronisation automatique)
+    try {
+      await this.customersService.findOrCreateByEmail(user.email, {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        phone: user.phone,
+        source: 'ecommerce',
+      } as any);
+    } catch (error) {
+      console.error('❌ Erreur lors de la création automatique du client:', error);
+      // On ne bloque pas l'inscription si la création du client échoue
+    }
+
+    // 7. TODO: Envoyer l'email de vérification
     // await this.emailService.sendVerificationEmail(user.email, emailVerificationToken);
 
     // 7. Générer les tokens (Reload with role needed for the response)

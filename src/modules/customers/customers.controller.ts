@@ -62,6 +62,7 @@ export class CustomersController {
       paginationDto.page,
       paginationDto.pageSize,
       paginationDto.search,
+      paginationDto.isActive,
     );
   }
 
@@ -71,6 +72,14 @@ export class CustomersController {
   @ApiResponse({ status: 200, description: 'Liste des meilleurs clients' })
   getTopCustomers(@Query('limit') limit?: number): Promise<Customer[]> {
     return this.customersService.getTopCustomers(limit || 5);
+  }
+
+  @Get('top-loyal')
+  @ApiOperation({ summary: 'Top clients par points de fidélité' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Liste des clients les plus fidèles' })
+  getTopLoyalCustomers(@Query('limit') limit?: number): Promise<Customer[]> {
+    return this.customersService.getTopLoyalCustomers(limit || 10);
   }
 
   @Get('email/:email')
