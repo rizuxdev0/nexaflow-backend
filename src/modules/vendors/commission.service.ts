@@ -28,18 +28,18 @@ export class CommissionService {
 
     // 2. Search for the most specific rule
     // Try Vendor-specific rule first
-    selectedRule = rules.find(r => r.type === CommissionRuleType.VENDOR && r.vendorId === vendorId);
+    selectedRule = rules.find(r => r.type === CommissionRuleType.VENDOR && r.vendorId === vendorId) ?? null;
     
     // If not, try Category-specific rule
     if (!selectedRule) {
-      selectedRule = rules.find(r => r.type === CommissionRuleType.CATEGORY && r.categoryId === categoryId);
+      selectedRule = rules.find(r => r.type === CommissionRuleType.CATEGORY && r.categoryId === categoryId) ?? null;
     }
 
     // If not, try Tier-specific rule
     if (!selectedRule) {
       const vendor = await this.vendorRepository.findOne({ where: { id: vendorId } });
       if (vendor) {
-        selectedRule = rules.find(r => r.type === CommissionRuleType.TIER && r.vendorTier === vendor.tier);
+        selectedRule = rules.find(r => r.type === CommissionRuleType.TIER && r.vendorTier === vendor.tier) ?? null;
         rate = vendor.commissionRate || 15; // Fallback to vendor's own set rate
       }
     }

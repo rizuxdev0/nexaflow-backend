@@ -174,8 +174,20 @@ export class StoreConfigService {
     }
 
     // 5. Sanitize Partners
-    const sanitizedPartners = this.sanitizePartners(config.partners || []);
-    if (sanitizedPartners.length !== (config.partners || []).length) {
+    let sanitizedPartners = this.sanitizePartners(config.partners || []);
+    
+    // Seed 5 default partners for testing if list is empty
+    if (sanitizedPartners.length === 0) {
+      sanitizedPartners = [
+        { id: 'p-seed-1', name: 'TechNova', logoUrl: 'https://picsum.photos/seed/tech/200/100', website: '#', enabled: true },
+        { id: 'p-seed-2', name: 'Lumière', logoUrl: 'https://picsum.photos/seed/lum/200/100', website: '#', enabled: true },
+        { id: 'p-seed-3', name: 'StyleVibe', logoUrl: 'https://picsum.photos/seed/style/200/100', website: '#', enabled: true },
+        { id: 'p-seed-4', name: 'GlobalGoods', logoUrl: 'https://picsum.photos/seed/goods/200/100', website: '#', enabled: true },
+        { id: 'p-seed-5', name: 'AeroFlex', logoUrl: 'https://picsum.photos/seed/aero/200/100', website: '#', enabled: true }
+      ];
+    }
+    
+    if (sanitizedPartners.length !== (config.partners || []).length || sanitizedPartners.length === 5) {
       config.partners = sanitizedPartners;
       changed = true;
     }
@@ -264,13 +276,19 @@ export class StoreConfigService {
       console.log('Is Array:', Array.isArray(partnersPayload));
       console.log('Content JSON:', JSON.stringify(partnersPayload));
 
-      // Sécurité : si on reçoit [ [partners] ], on aplatit
-      if (Array.isArray(partnersPayload) && partnersPayload.length === 1 && Array.isArray(partnersPayload[0])) {
-        console.log('DETECTED NESTED ARRAY [[]] - Flattening...');
-        partnersPayload = partnersPayload[0];
+      // Sécurité : vérifier si on a reçu une chaîne JSON ou des objets imbriqués
+      if (typeof partnersPayload === 'string') {
+        try { partnersPayload = JSON.parse(partnersPayload); } catch (e) {}
+      }
+      if (Array.isArray(partnersPayload) && partnersPayload.length === 1) {
+        if (typeof partnersPayload[0] === 'string') {
+          try { partnersPayload = JSON.parse(partnersPayload[0]); } catch (e) {}
+        } else if (Array.isArray(partnersPayload[0])) {
+          partnersPayload = partnersPayload[0];
+        }
       }
 
-      config.partners = Array.isArray(partnersPayload) ? partnersPayload : [];
+      config.partners = this.sanitizePartners(Array.isArray(partnersPayload) ? partnersPayload : []);
       console.log('Final partners to save count:', config.partners.length);
       console.log('-----------------------------');
     }

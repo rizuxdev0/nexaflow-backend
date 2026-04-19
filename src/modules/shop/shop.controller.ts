@@ -49,22 +49,19 @@ export class ShopController {
     enum: ['price_asc', 'price_desc', 'newest'],
   })
   @ApiResponse({ status: 200, description: 'Liste des produits' })
+  @ApiResponse({ status: 200, description: 'Liste des produits' })
   async getProducts(
     @Query() paginationDto: PaginationDto,
-    @Query('categoryId') categoryId?: string,
-    @Query('minPrice') minPrice?: number,
-    @Query('maxPrice') maxPrice?: number,
-    @Query('sortBy') sortBy?: any,
   ): Promise<PaginatedResponse<ShopProductResponseDto>> {
     return this.shopService.getPublicProducts(
       paginationDto.page,
       paginationDto.pageSize,
       paginationDto.search,
-      categoryId,
-      minPrice,
-      maxPrice,
+      paginationDto.categoryId,
+      paginationDto.minPrice,
+      paginationDto.maxPrice,
       true, // inStock seulement
-      sortBy,
+      paginationDto.sortBy,
     );
   }
 

@@ -93,7 +93,7 @@ export class PayoutsService {
         // We track everything in separate columns in Vendor entity anyway
         
         payout.status = PayoutStatus.COMPLETED;
-        payout.transactionReference = reference;
+        payout.transactionReference = reference ?? null;
         payout.processedAt = new Date();
       } else if (status === PayoutStatus.FAILED || status === PayoutStatus.CANCELLED) {
         payout.status = status;

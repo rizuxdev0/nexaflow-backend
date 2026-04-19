@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { Order } from './entities/order.entity';
+import { Driver } from '../deliveries/entities/driver.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductVariant } from '../products/entities/product-variant.entity';
@@ -25,6 +26,7 @@ import { VendorsModule } from '../vendors/vendors.module';
       CashSession,
       ProductBundle,
       Warehouse,
+      Driver,
     ]),
     AuditModule,
     StockModule,

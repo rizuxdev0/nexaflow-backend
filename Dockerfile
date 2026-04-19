@@ -25,9 +25,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --only=production
 
-# Copy built assets from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
+# Copy built assets from builder 
+COPY --from=builder /app/dist ./dist 
+COPY --from=builder /app/node_modules ./node_modules 
 
 # Expose port
 EXPOSE 3000

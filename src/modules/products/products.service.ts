@@ -608,7 +608,7 @@ export class ProductsService {
   ): Promise<Product> {
     const product = await this.findOne(id);
     product.approvalStatus = status as any;
-    product.rejectionReason = reason;
+    product.rejectionReason = reason ?? null;
 
     // If approved, make sure it's active
     if (status === 'APPROVED') {

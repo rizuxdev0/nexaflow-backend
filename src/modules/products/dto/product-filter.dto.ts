@@ -43,5 +43,5 @@ export class ProductFilterDto extends PaginationDto {
     return value === 'true' || value === true || value === 1 || value === '1';
   })
   @IsBoolean()
-  isActive?: boolean;
+  declare isActive?: boolean;
 }

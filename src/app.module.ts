@@ -68,10 +68,7 @@ import { CustomPacksModule } from './modules/custom-packs/custom-packs.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { VendorsModule } from './modules/vendors/vendors.module';
 import { CustomerEventsModule } from './modules/customer-events/customer-events.module';
-
-
-
-// Common
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -150,6 +147,7 @@ import { CustomerEventsModule } from './modules/customer-events/customer-events.
     StoreConfigModule,
     DashboardModule,
     ReturnPolicyModule,
+    SubscriptionsModule,
 
     BannersModule,
     LoyaltyModule,

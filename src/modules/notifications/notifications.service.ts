@@ -96,6 +96,18 @@ export class NotificationsService {
     });
   }
 
+  async notifyDeliveryUpdate(orderNumber: string, status: string, driverName?: string, customerId?: string) {
+    const statusText = status === 'assigned' ? `assignée à ${driverName}` : status;
+    return this.create({
+      type: NotificationType.DELIVERY,
+      customerId,
+      title: 'Suivi de livraison',
+      message: `Votre commande ${orderNumber} est ${statusText}`,
+      link: `/boutique/profil?tab=orders`,
+      metadata: { orderNumber, status, driverName }
+    });
+  }
+
   async markRead(id: string) {
     const notif = await this.findOne(id);
     notif.isRead = true;

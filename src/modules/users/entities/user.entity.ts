@@ -88,6 +88,16 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  @ManyToOne('SubscriptionPlan', { nullable: true })
+  @JoinColumn({ name: 'subscriptionPlanId' })
+  subscriptionPlan: any;
+
+  @Column({ nullable: true })
+  subscriptionPlanId: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionExpiresAt: Date;
+
   // Propriétés calculées
   get fullName(): string {
     return `${this.firstName} ${this.lastName}`;

@@ -1,14 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Like, ArrayContains } from 'typeorm';
+import { Driver } from './entities/driver.entity';
 import { DeliveryZone } from './entities/delivery-zone.entity';
+import { Order, OrderStatus, DeliveryStatus } from '../orders/entities/order.entity';
 import { CreateDeliveryZoneDto, UpdateDeliveryZoneDto, CalculateShippingDto } from './dto/delivery.dto';
+import { CreateDriverDto, UpdateDriverDto, AssignDeliveryDto, UpdateDeliveryStatusDto, UpdateDriverLocationDto } from './dto/driver.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class DeliveriesService {
   constructor(
     @InjectRepository(DeliveryZone)
     private readonly zoneRepository: Repository<DeliveryZone>,
+    @InjectRepository(Driver)
+    private readonly driverRepository: Repository<Driver>,
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async getZones(page: number = 1, pageSize: number = 20) {
@@ -46,9 +55,6 @@ export class DeliveriesService {
 
   // --- Core Calculation ---
   async calculateShipping(dto: CalculateShippingDto) {
-    // Need to find the zone where cities include the requested city.
-    // In TypeORM with simple-array we can find all active zones and filter in memory, 
-    // or use a specific query if supported. Since active zones aren't many usually, memory is fine or use ILike `%city%`.
     const zones = await this.zoneRepository.find({ where: { isActive: true } });
     const zone = zones.find(z => z.cities.map(c => c.toLowerCase()).includes(dto.city.toLowerCase()));
 
@@ -63,7 +69,6 @@ export class DeliveriesService {
       isFree = true;
       fee = 0;
     } else if (zone.weightSurcharge && dto.totalWeight && dto.totalWeight > 0) {
-      // For instance, weight > 1kg -> surcharge applies
       fee += Number(zone.weightSurcharge) * dto.totalWeight;
     }
 
@@ -74,5 +79,100 @@ export class DeliveriesService {
       isFree,
       estimatedDays: zone.estimatedDays
     };
+  }
+
+  // --- Driver Management ---
+  async getDrivers(page: number = 1, pageSize: number = 20) {
+    const [data, total] = await this.driverRepository.findAndCount({
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      order: { name: 'ASC' }
+    });
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  }
+
+  async createDriver(dto: CreateDriverDto) {
+    const driver = this.driverRepository.create(dto);
+    return this.driverRepository.save(driver);
+  }
+
+  async updateDriver(id: string, dto: UpdateDriverDto) {
+    await this.driverRepository.update(id, dto);
+    return this.driverRepository.findOne({ where: { id } });
+  }
+
+  async deleteDriver(id: string) {
+    return this.driverRepository.delete(id);
+  }
+
+  // --- Delivery Assignments ---
+  async assignDelivery(dto: AssignDeliveryDto) {
+    const order = await this.orderRepository.findOne({ where: { id: dto.orderId } });
+    const driver = await this.driverRepository.findOne({ where: { id: dto.driverId } });
+
+    if (!order || !driver) throw new NotFoundException('Commande ou Livreur non trouvé');
+
+    order.driverId = driver.id;
+    order.deliveryStatus = DeliveryStatus.ASSIGNED;
+    const savedOrder = await this.orderRepository.save(order);
+    
+    await this.notificationsService.notifyDeliveryUpdate(
+      order.orderNumber, 
+      'assigned', 
+      driver.name, 
+      order.customerId
+    );
+    
+    return savedOrder;
+  }
+
+  async updateDeliveryStatus(orderId: string, dto: UpdateDeliveryStatusDto) {
+    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Commande non trouvée');
+
+    order.deliveryStatus = dto.status as any;
+    if (dto.status === 'delivered') {
+      order.deliveredAt = new Date();
+      order.status = OrderStatus.DELIVERED;
+    }
+    if (dto.notes) order.notes = (order.notes || '') + '\n' + dto.notes;
+
+    const savedOrder = await this.orderRepository.save(order);
+    
+    await this.notificationsService.notifyDeliveryUpdate(
+      order.orderNumber, 
+      dto.status, 
+      undefined, 
+      order.customerId
+    );
+    
+    return savedOrder;
+  }
+
+  async getPendingDeliveries() {
+    return this.orderRepository.find({
+      where: { deliveryStatus: DeliveryStatus.PENDING },
+      relations: ['customer']
+    });
+  }
+
+  async getActiveDeliveries() {
+    return this.orderRepository.find({
+      where: { 
+        deliveryStatus: In(['assigned', 'picked_up', 'out_for_delivery'] as any) 
+      },
+      relations: ['customer', 'driver']
+    });
+  }
+
+  async updateLocation(dto: UpdateDriverLocationDto) {
+    const driver = await this.driverRepository.findOne({ where: { id: dto.driverId } });
+    if (!driver) throw new NotFoundException('Livreur non trouvé');
+
+    driver.latitude = parseFloat(dto.latitude);
+    driver.longitude = parseFloat(dto.longitude);
+    driver.lastLocationUpdate = new Date();
+
+    return this.driverRepository.save(driver);
   }
 }

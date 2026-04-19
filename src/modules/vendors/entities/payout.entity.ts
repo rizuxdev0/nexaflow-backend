@@ -37,8 +37,8 @@ export class Payout {
   @Column({ nullable: true })
   method: string; // bank_transfer, mobile_money, etc.
 
-  @Column({ nullable: true })
-  transactionReference: string;
+  @Column({ type: 'varchar', nullable: true })
+  transactionReference: string | null;
 
   @Column({ type: 'text', nullable: true })
   notes: string;

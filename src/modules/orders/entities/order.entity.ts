@@ -12,6 +12,7 @@ import { OrderItem } from './order-item.entity';
 import { CashSession } from 'src/modules/cash-sessions/entities/cash-session.entity';
 import { Customer } from 'src/modules/customers/entities/customer.entity';
 import { User } from 'src/modules/users/entities/user.entity';
+import { Driver } from 'src/modules/deliveries/entities/driver.entity';
 export enum OrderStatus {
   DRAFT = 'draft',
   PENDING = 'pending',
@@ -22,6 +23,15 @@ export enum OrderStatus {
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
   REFUNDED = 'refunded',
+}
+
+export enum DeliveryStatus {
+  PENDING = 'pending',
+  ASSIGNED = 'assigned',
+  PICKED_UP = 'picked_up',
+  OUT_FOR_DELIVERY = 'out_for_delivery',
+  DELIVERED = 'delivered',
+  FAILED = 'failed',
 }
 
 export enum PaymentStatus {
@@ -136,4 +146,21 @@ export class Order {
 
   @Column({ type: 'jsonb', nullable: true })
   statusHistory: Array<{ status: string; timestamp: Date }>;
+
+  @ManyToOne(() => Driver, (driver) => driver.orders, { nullable: true })
+  @JoinColumn({ name: 'driverId' })
+  driver: Driver;
+
+  @Column({ nullable: true })
+  driverId: string;
+
+  @Column({
+    type: 'enum',
+    enum: DeliveryStatus,
+    default: DeliveryStatus.PENDING,
+  })
+  deliveryStatus: DeliveryStatus;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deliveredAt: Date;
 }

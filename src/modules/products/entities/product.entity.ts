@@ -148,7 +148,7 @@ export class Product {
   approvalStatus: ProductApprovalStatus;
 
   @Column({ type: 'text', nullable: true })
-  rejectionReason: string;
+  rejectionReason: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
