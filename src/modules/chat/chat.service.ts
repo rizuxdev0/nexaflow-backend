@@ -13,34 +13,42 @@ export class ChatService {
     private readonly messageRepo: Repository<Message>,
   ) {}
 
-  async createConversation(data: { customerName: string; customerEmail?: string; customerId?: string }) {
-    console.log('Attempting to create/find conversation for:', data.customerName, 'ID:', data.customerId);
+  async createConversation(data: { 
+    customerName?: string; 
+    customerEmail?: string; 
+    customerId?: string;
+    type?: 'support' | 'order' | 'internal' | 'group';
+    orderId?: string;
+    driverId?: string;
+    title?: string;
+    metadata?: any;
+  }) {
+    console.log('Attempting to create/find conversation type:', data.type || 'support');
     
-    // Look for an existing active conversation using either ID or Email
-    if (data.customerId || data.customerEmail) {
-      const queryBuilder = this.conversationRepo.createQueryBuilder('conversation')
-        .where('conversation.status = :status', { status: 'active' })
-        .andWhere('(conversation.customerId = :customerId OR conversation.customerEmail = :customerEmail)', {
-          customerId: data.customerId || null,
-          customerEmail: data.customerEmail || null
-        })
-        .orderBy('conversation.updatedAt', 'DESC');
-
-      const existing = await queryBuilder.getOne();
-      if (existing) {
-        console.log('Reusing existing conversation:', existing.id);
-        
-        // Update missing link if needed (e.g., guest transitioned to logged in)
-        if (data.customerId && !existing.customerId) {
-          await this.conversationRepo.update(existing.id, { customerId: data.customerId });
-        }
-        return existing;
-      }
+    // For 1-1 support chats, look for existing active one
+    if ((data.type === 'support' || !data.type) && (data.customerId || data.customerEmail)) {
+      const existing = await this.conversationRepo.findOne({
+        where: [
+          { customerId: data.customerId, status: 'active', type: 'support' },
+          { customerEmail: data.customerEmail, status: 'active', type: 'support' }
+        ],
+        order: { updatedAt: 'DESC' }
+      });
+      if (existing) return existing;
     }
 
-    console.log('Creating new conversation for:', data.customerName);
+    // For order-specific chats (Driver-Customer)
+    if (data.type === 'order' && data.orderId) {
+      const existing = await this.conversationRepo.findOne({
+        where: { orderId: data.orderId, type: 'order', status: 'active' }
+      });
+      if (existing) return existing;
+    }
+
+    console.log('Creating new conversation');
     const conversation = this.conversationRepo.create({
       ...data,
+      type: data.type || 'support',
       status: 'active',
     });
     return this.conversationRepo.save(conversation);
@@ -55,35 +63,32 @@ export class ChatService {
     return conv;
   }
 
-  async getActiveConversations() {
-    const allActive = await this.conversationRepo.find({
-      where: { status: 'active' },
+  async getActiveConversations(filters?: { type?: string; driverId?: string; customerId?: string }) {
+    return this.conversationRepo.find({
+      where: { 
+        status: 'active',
+        ...(filters?.type && { type: filters.type as any }),
+        ...(filters?.driverId && { driverId: filters.driverId }),
+        ...(filters?.customerId && { customerId: filters.customerId }),
+      },
       order: { updatedAt: 'DESC' },
     });
-
-    // Remove duplicates: keep only the most recently updated conversation per customer
-    const uniqueConversations: Conversation[] = [];
-    const seenCustomers = new Set<string>();
-
-    for (const conv of allActive) {
-      const identifier = conv.customerId || conv.customerEmail || conv.customerName;
-      if (!seenCustomers.has(identifier)) {
-        seenCustomers.add(identifier);
-        uniqueConversations.push(conv);
-      }
-    }
-
-    return uniqueConversations;
   }
 
-  async saveMessage(data: { conversationId: string; content: string; senderType: 'customer' | 'admin'; senderId?: string }) {
+  async saveMessage(data: { 
+    conversationId: string; 
+    content: string; 
+    senderType: 'customer' | 'admin' | 'driver'; 
+    senderId?: string;
+    attachments?: any[];
+  }) {
     console.log('Chat Service saving message for conversation:', data.conversationId);
     const message = this.messageRepo.create(data);
     const saved = await this.messageRepo.save(message);
     
     // Update last message in conversation
     await this.conversationRepo.update(data.conversationId, {
-      lastMessage: data.content,
+      lastMessage: data.content || (data.attachments?.length ? 'Pièce jointe' : ''),
       updatedAt: new Date(),
     });
 

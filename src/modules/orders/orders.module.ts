@@ -15,6 +15,7 @@ import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { CustomersModule } from '../customers/customers.module';
 import { VendorsModule } from '../vendors/vendors.module';
+import { StoreConfigModule } from '../store-config/store-config.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { VendorsModule } from '../vendors/vendors.module';
     LoyaltyModule,
     CustomersModule,
     VendorsModule,
+    StoreConfigModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

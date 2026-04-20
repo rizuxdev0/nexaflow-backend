@@ -56,8 +56,8 @@ export class ChatController {
     return this.chatService.getActiveConversations();
   }
 
+  @Public()
   @Get('conversations/:id')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get one conversation with messages' })
   async getConversation(@Param('id') id: string) {
     return this.chatService.getConversation(id);
@@ -71,8 +71,8 @@ export class ChatController {
     return this.chatService.closeConversation(id);
   }
 
+  @Public()
   @Get('conversations/:id/messages')
-  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Get messages for a conversation' })
   async getMessages(@Param('id') id: string) {
     console.log('ChatController: Fetching messages for:', id);

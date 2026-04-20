@@ -314,7 +314,7 @@ async function bootstrap() {
   // ============ START SERVER ============
 
   const listenPort = process.env.PORT || port;
-  await app.listen(listenPort);
+  await app.listen(listenPort, '0.0.0.0');
   console.log(`🚀 Application is running on: http://localhost:${listenPort}/api/v1`);
   console.log(`📚 Swagger documentation: http://localhost:${listenPort}/api/v1/docs`);
   console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);

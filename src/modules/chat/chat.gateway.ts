@@ -8,15 +8,9 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { UseGuards } from '@nestjs/common';
 import { ChatService } from './chat.service';
-import { WsJwtAuthGuard } from '../../common/guards/ws-jwt-auth.guard';
 
-@WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
-})
+@WebSocketGateway({ cors: { origin: '*' } })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
@@ -24,59 +18,83 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(private readonly chatService: ChatService) {}
 
   async handleConnection(client: Socket) {
-    console.log('Client attempting to connect');
+    console.log(`[ChatGateway] Client connected: ${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
-    console.log('Client disconnected');
+    console.log(`[ChatGateway] Client disconnected: ${client.id}`);
   }
 
-  @UseGuards(WsJwtAuthGuard)
-  @SubscribeMessage('sendMessage')
-  async handleMessage(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { conversationId: string; content: string; senderType: 'customer' | 'admin' },
-  ) {
-    // We assume the user is injected by the guard
-    const user = (client as any).user;
-    console.log('Chat message received from user:', user?.email, 'Type:', data.senderType);
-    console.log('Message Content payload:', JSON.stringify(data, null, 2));
-    
-    if (!user) {
-      console.error('Unauthorized chat attempt - no user in socket');
-      return { status: 'error', message: 'Unauthorized' };
-    }
-
-    const message = await this.chatService.saveMessage({
-      ...data,
-      senderId: user.sub || user.id,
-    });
-    
-    const conversation = await this.chatService.getConversation(data.conversationId);
-    const enrichedMessage = { ...message, senderName: conversation.customerName };
-
-    console.log('Broadcasting enriched message to room:', data.conversationId);
-    this.server.to(data.conversationId).emit('newMessage', enrichedMessage);
-    
-    if (enrichedMessage.senderType === 'customer') {
-      console.log('Sending admin notification for new customer message');
-      this.server.emit('adminNotification', {
-        type: 'new_message',
-        conversationId: enrichedMessage.conversationId,
-        message: enrichedMessage,
-      });
-    }
-
-    return enrichedMessage;
-  }
-
-  @UseGuards(WsJwtAuthGuard)
   @SubscribeMessage('joinConversation')
   handleJoinConversation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { conversationId: string },
   ) {
     client.join(data.conversationId);
-    return { status: 'success', joined: data.conversationId };
+    const size = this.server.sockets.adapter.rooms.get(data.conversationId)?.size ?? 0;
+    console.log(`[ChatGateway] ${client.id} joined room ${data.conversationId} | size: ${size}`);
+    return { status: 'success', joined: data.conversationId, roomSize: size };
+  }
+
+  @SubscribeMessage('sendMessage')
+  async handleMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: {
+      conversationId: string;
+      content: string;
+      senderType: 'customer' | 'admin' | 'driver';
+      attachments?: any[];
+    },
+  ) {
+    const user = (client as any).user;
+    let senderId = user?.sub || user?.id || (data as any).senderId;
+
+    if (!senderId && data.senderType === 'customer') {
+      const conv = await this.chatService.getConversation(data.conversationId);
+      senderId = conv?.customerId;
+    }
+
+    if (!senderId) {
+      console.error('[ChatGateway] sendMessage rejected: no senderId');
+      return { status: 'error', message: 'Unauthorized' };
+    }
+
+    const message = await this.chatService.saveMessage({ ...data, senderId });
+    const conversation = await this.chatService.getConversation(data.conversationId);
+
+    let senderName = user?.name || user?.firstName || conversation?.customerName || 'Client';
+    if (data.senderType === 'driver') senderName = user?.name || 'Livreur';
+    if (data.senderType === 'admin') senderName = user?.name || user?.firstName || 'Administration';
+
+    const enrichedMessage = { ...message, senderName };
+
+    // Ensure sender is in room
+    client.join(data.conversationId);
+
+    const roomSize = this.server.sockets.adapter.rooms.get(data.conversationId)?.size ?? 0;
+    console.log(`[ChatGateway] Sending to room ${data.conversationId} | size: ${roomSize}`);
+
+    // 1️⃣ Send to everyone already in the room (including the sender now)
+    this.server.to(data.conversationId).emit('newMessage', enrichedMessage);
+
+    if (data.senderType === 'admin') {
+      // 2️⃣ ADMIN→CLIENT: broadcast to ALL sockets so client receives even if not in room
+      // Client filters by conversationId
+      console.log(`[ChatGateway] Broadcasting adminReply to all sockets`);
+      this.server.emit('adminReply', {
+        conversationId: data.conversationId,
+        message: enrichedMessage,
+      });
+    } else {
+      // 3️⃣ CLIENT→ADMIN: notify admin panel
+      console.log(`[ChatGateway] Broadcasting adminNotification to all sockets`);
+      this.server.emit('adminNotification', {
+        type: 'new_message',
+        conversationId: data.conversationId,
+        message: enrichedMessage,
+      });
+    }
+
+    return enrichedMessage;
   }
 }

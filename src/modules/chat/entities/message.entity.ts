@@ -24,10 +24,13 @@ export class Message {
   senderId: string;
 
   @Column({ default: 'customer' })
-  senderType: 'customer' | 'admin';
+  senderType: 'customer' | 'admin' | 'driver';
 
   @Column({ type: 'text' })
   content: string;
+
+  @Column({ type: 'json', nullable: true })
+  attachments: { url: string; name: string; type: string }[];
 
   @Column({ default: false })
   isRead: boolean;

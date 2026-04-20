@@ -39,6 +39,7 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import { CustomersService } from '../customers/customers.service';
 
 import { CommissionService } from '../vendors/commission.service';
+import { StoreConfigService } from '../store-config/store-config.service';
 
 @Injectable()
 export class OrdersService {
@@ -64,6 +65,7 @@ export class OrdersService {
     private loyaltyService: LoyaltyService,
     private customersService: CustomersService,
     private commissionService: CommissionService,
+    private storeConfigService: StoreConfigService,
   ) {}
 
   //   async createPosOrder(
@@ -297,10 +299,24 @@ export class OrdersService {
 
       const afterDiscount = subtotal - discountAmount;
 
-      // 4. Calculer la TVA (18% par défaut)
-      const taxRate = 0.18;
-      const taxAmount = Math.round(afterDiscount * taxRate);
-      const total = afterDiscount + taxAmount;
+      // 4. Calculer la TVA à partir de la configuration globale
+      const config = await this.storeConfigService.get();
+      const currentTaxRate = (config.checkout.tax.defaultTaxRate || 18) / 100;
+      const pricesIncludeTax = config.checkout.tax.pricesIncludeTax === true;
+      
+      let taxAmount = 0;
+      let total = 0;
+
+      if (pricesIncludeTax) {
+        // Le sous-total calculé (subtotal) est déjà le montant final (TC)
+        total = afterDiscount;
+        // La TVA est extraite du total pour l'information
+        taxAmount = Math.round(total - (total / (1 + currentTaxRate)));
+      } else {
+        // La TVA est ajoutée au montant (HT)
+        taxAmount = Math.round(afterDiscount * currentTaxRate);
+        total = afterDiscount + taxAmount;
+      }
 
       // 5. Vérifier le montant remis pour les espèces
       let change = 0;
@@ -360,8 +376,10 @@ export class OrdersService {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           totalPrice: item.unitPrice * item.quantity,
-          taxRate,
-          taxAmount: Math.round(item.unitPrice * item.quantity * taxRate),
+          taxRate: currentTaxRate,
+          taxAmount: pricesIncludeTax 
+            ? Math.round((item.unitPrice * item.quantity) - ((item.unitPrice * item.quantity) / (1 + currentTaxRate)))
+            : Math.round(item.unitPrice * item.quantity * currentTaxRate),
           commissionRate: commission.rate,
           commissionAmount: commission.amount,
         });
@@ -478,11 +496,24 @@ export class OrdersService {
       );
 
       // Use the calculated total if not provided
+      const config = await this.storeConfigService.get();
+      const defaultTaxRate = (config.checkout.tax.defaultTaxRate || 18) / 100;
+      const pricesIncludeTax = config.checkout.tax.pricesIncludeTax === true;
+
       const subtotal = createOrderDto.subtotal || calculatedSubtotal;
-      const taxRate = 0.18; // Default
-      const taxTotal = createOrderDto.taxTotal || Math.round(subtotal * taxRate);
+      
+      let taxTotal = 0;
+      let total = 0;
       const discountTotal = createOrderDto.discountTotal || 0;
-      const total = createOrderDto.total || (subtotal + taxTotal - discountTotal);
+      const afterDiscount = subtotal - discountTotal;
+
+      if (pricesIncludeTax) {
+        total = createOrderDto.total || afterDiscount;
+        taxTotal = createOrderDto.taxTotal || Math.round(total - (total / (1 + defaultTaxRate)));
+      } else {
+        taxTotal = createOrderDto.taxTotal || Math.round(afterDiscount * defaultTaxRate);
+        total = createOrderDto.total || (afterDiscount + taxTotal);
+      }
 
       // 2. Generate order number
       const prefix = createOrderDto.source === 'ecommerce' ? 'WEB' : 'CMD';
@@ -530,8 +561,10 @@ export class OrdersService {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           totalPrice: item.unitPrice * item.quantity,
-          taxRate,
-          taxAmount: Math.round(item.unitPrice * item.quantity * taxRate),
+          taxRate: defaultTaxRate,
+          taxAmount: pricesIncludeTax
+            ? Math.round((item.unitPrice * item.quantity) - ((item.unitPrice * item.quantity) / (1 + defaultTaxRate)))
+            : Math.round(item.unitPrice * item.quantity * defaultTaxRate),
           commissionRate: commission.rate,
           commissionAmount: commission.amount,
         });

@@ -16,17 +16,32 @@ export class Conversation {
   @Column({ nullable: true })
   customerId: string;
 
-  @Column()
+  @Column({ default: 'support' })
+  type: 'support' | 'order' | 'internal' | 'group';
+
+  @Column({ nullable: true })
   customerName: string;
 
   @Column({ nullable: true })
   customerEmail: string;
+
+  @Column({ nullable: true })
+  title: string;
+
+  @Column({ nullable: true })
+  orderId: string;
+
+  @Column({ nullable: true })
+  driverId: string;
 
   @Column({ default: 'active' })
   status: 'active' | 'closed';
 
   @Column({ nullable: true })
   lastMessage: string;
+
+  @Column({ type: 'json', nullable: true })
+  metadata: any;
 
   @CreateDateColumn()
   createdAt: Date;
