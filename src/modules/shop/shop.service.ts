@@ -242,6 +242,17 @@ export class ShopService {
 
       // 3. Gérer le client
       let customerId = createOrderDto.customerId;
+
+      // Vérifier si le client existe si un ID est fourni (évite les erreurs de FK si l'ID est un userId ou obsolète)
+      if (customerId) {
+        const customerExists = await this.customersRepository.findOne({
+          where: { id: customerId },
+        });
+        if (!customerExists) {
+          customerId = undefined;
+        }
+      }
+
       if (!customerId && createOrderDto.customerEmail) {
         const customer = await this.customersService.findOrCreateByEmail(
           createOrderDto.customerEmail,
@@ -320,6 +331,7 @@ export class ShopService {
       // 8. Générer la facture automatiquement
       const invoice = await this.invoicesService.generateFromOrder(
         savedOrder.id,
+        queryRunner.manager,
       );
 
       // Mettre à jour la commande avec l'ID de la facture
@@ -333,7 +345,9 @@ export class ShopService {
       return await this.getOrderDetails(savedOrder.id);
     } catch (error) {
       // En cas d'erreur, annuler la transaction
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
       throw error;
     } finally {
       // Libérer le queryRunner
@@ -428,7 +442,7 @@ export class ShopService {
   async getOrderDetails(orderId: string): Promise<ShopOrderResponseDto> {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['items', 'customer', 'invoice'],
+      relations: ['items', 'customer'],
     });
 
     if (!order) {

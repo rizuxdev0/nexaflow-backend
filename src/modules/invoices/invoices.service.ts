@@ -132,7 +132,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, Like, FindOptionsWhere } from 'typeorm';
+import { Repository, Between, Like, FindOptionsWhere, EntityManager } from 'typeorm';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
 import { Order } from '../orders/entities/order.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
@@ -154,8 +154,11 @@ export class InvoicesService {
 
   // ============ GÉNÉRATION DE FACTURE ============
 
-  async generateFromOrder(orderId: string): Promise<Invoice> {
-    const order = await this.ordersRepository.findOne({
+  async generateFromOrder(orderId: string, manager?: EntityManager): Promise<Invoice> {
+    const repoOrder = manager ? manager.getRepository(Order) : this.ordersRepository;
+    const repoInvoice = manager ? manager.getRepository(Invoice) : this.invoicesRepository;
+
+    const order = await repoOrder.findOne({
       where: { id: orderId },
       relations: ['items', 'customer'],
     });
@@ -165,7 +168,7 @@ export class InvoicesService {
     }
 
     // Vérifier si une facture existe déjà
-    const existingInvoice = await this.invoicesRepository.findOne({
+    const existingInvoice = await repoInvoice.findOne({
       where: { orderId },
     });
 
@@ -174,7 +177,7 @@ export class InvoicesService {
     }
 
     // Générer le numéro de facture
-    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoiceNumber = await this.generateInvoiceNumber(manager);
 
     // Préparer les items pour la facture
     const items = order.items.map((item) => ({
@@ -194,7 +197,7 @@ export class InvoicesService {
     dueDate.setDate(dueDate.getDate() + 30);
 
     // Créer la facture
-    const invoice = this.invoicesRepository.create({
+    const invoice = repoInvoice.create({
       invoiceNumber,
       orderId: order.id,
       orderNumber: order.orderNumber,
@@ -213,10 +216,11 @@ export class InvoicesService {
       paymentMethod: order.paymentMethod,
     });
 
-    return await this.invoicesRepository.save(invoice);
+    return await repoInvoice.save(invoice);
   }
 
-  private async generateInvoiceNumber(): Promise<string> {
+  private async generateInvoiceNumber(manager?: EntityManager): Promise<string> {
+    const repoInvoice = manager ? manager.getRepository(Invoice) : this.invoicesRepository;
     const date = new Date();
     const year = date.getFullYear();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -225,7 +229,7 @@ export class InvoicesService {
     const startOfMonth = new Date(year, date.getMonth(), 1);
     const endOfMonth = new Date(year, date.getMonth() + 1, 0, 23, 59, 59);
 
-    const count = await this.invoicesRepository.count({
+    const count = await repoInvoice.count({
       where: {
         createdAt: Between(startOfMonth, endOfMonth),
       },

@@ -49,9 +49,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = (client as any).user;
     let senderId = user?.sub || user?.id || (data as any).senderId;
 
-    if (!senderId && data.senderType === 'customer') {
+    // Fallback: resolve senderId from conversation for any senderType
+    if (!senderId) {
       const conv = await this.chatService.getConversation(data.conversationId);
-      senderId = conv?.customerId;
+      if (data.senderType === 'customer') {
+        senderId = conv?.customerId;
+      } else if (data.senderType === 'admin') {
+        // Use the socket id as a fallback identifier for admin
+        senderId = client.id;
+      }
     }
 
     if (!senderId) {
