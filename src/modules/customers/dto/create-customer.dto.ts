@@ -83,4 +83,9 @@ export class CreateCustomerDto {
   @IsString()
   @IsOptional()
   source?: string;
+
+  @ApiPropertyOptional({ description: 'Photo de profil' })
+  @IsString()
+  @IsOptional()
+  profilePicture?: string;
 }

@@ -17,6 +17,14 @@ export class CustomPacksService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // Temporary cleanup of old invalid data (User IDs in CustomerID column)
+    // This allows re-enabling the Foreign Key constraint later
+    const countRequests = await this.requestRepo.count();
+    if (countRequests > 0) {
+      console.log(`🧹 Cleaning up ${countRequests} old custom pack requests...`);
+      await this.requestRepo.clear();
+    }
+
     // Initializer la config si elle n'existe pas
     const count = await this.configRepo.count();
     if (count === 0) {
@@ -51,7 +59,7 @@ export class CustomPacksService implements OnModuleInit {
   // --- Demandes (Requests) ---
   async findAll(pagination: PaginationDto, status?: string, customerId?: string) {
     const page = pagination.page || 1;
-    const pageSize = pagination.pageSize || 20;
+    const pageSize = pagination.limit || pagination.pageSize || 20;
     const skip = (page - 1) * pageSize;
 
     const query = this.requestRepo.createQueryBuilder('request');

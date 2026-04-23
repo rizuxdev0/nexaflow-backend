@@ -1,13 +1,13 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
+import { Customer } from '../../customers/entities/customer.entity';
 
-@Entity('custom_pack_requests')
+@Entity('custom_pack_requests_v2')
 export class CustomPackRequest {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
-  customerId: string; // This stores the User ID from the ecommerce front
+  @Column({ nullable: true })
+  customerId: string; // This stores the Customer ID from the ecommerce front
 
   @Column()
   customerName: string;
@@ -15,22 +15,22 @@ export class CustomPackRequest {
   @Column()
   customerEmail: string;
 
-  @Column('jsonb')
+  @Column('jsonb', { nullable: true })
   items: any[];
 
-  @Column('float')
+  @Column('float', { nullable: true })
   originalTotal: number;
 
-  @Column()
+  @Column({ nullable: true })
   discountType: 'percentage' | 'fixed';
 
-  @Column('float')
+  @Column('float', { nullable: true })
   discountValue: number;
 
-  @Column('float')
+  @Column('float', { nullable: true })
   discountedTotal: number;
 
-  @Column('float')
+  @Column('float', { nullable: true })
   savings: number;
 
   @Column({ default: 'pending' })
@@ -57,7 +57,9 @@ export class CustomPackRequest {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne(() => User, { nullable: true })
+  /*
+  @ManyToOne(() => Customer, { nullable: true })
   @JoinColumn({ name: 'customerId' })
-  customer: User;
+  customer: Customer;
+  */
 }

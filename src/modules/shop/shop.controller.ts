@@ -48,6 +48,7 @@ export class ShopController {
     required: false,
     enum: ['price_asc', 'price_desc', 'newest'],
   })
+  @ApiQuery({ name: 'inStock', required: false, type: Boolean })
   @ApiResponse({ status: 200, description: 'Liste des produits' })
   @ApiResponse({ status: 200, description: 'Liste des produits' })
   async getProducts(
@@ -58,9 +59,10 @@ export class ShopController {
       paginationDto.pageSize,
       paginationDto.search,
       paginationDto.categoryId,
+      paginationDto.categorySlug,
       paginationDto.minPrice,
       paginationDto.maxPrice,
-      true, // inStock seulement
+      paginationDto.inStock,
       paginationDto.sortBy,
     );
   }

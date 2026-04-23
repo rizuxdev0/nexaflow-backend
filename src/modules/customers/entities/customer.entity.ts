@@ -61,6 +61,9 @@ export class Customer {
   @Column({ default: 'pos' })
   source: string; // 'pos' or 'ecommerce'
 
+  @Column({ nullable: true })
+  profilePicture: string;
+
   @Column({ default: true })
   isActive: boolean;
 

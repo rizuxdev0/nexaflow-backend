@@ -141,7 +141,26 @@ export class CustomersService {
     }
 
     Object.assign(customer, updateCustomerDto);
-    return await this.customersRepository.save(customer);
+    const saved = await this.customersRepository.save(customer);
+
+    // Synchroniser avec la table User si elle existe (liée par email)
+    try {
+      const userRepo = this.customersRepository.manager.getRepository('User');
+      const user = await userRepo.findOne({ where: { email: customer.email } });
+      if (user) {
+        if (updateCustomerDto.firstName) (user as any).firstName = updateCustomerDto.firstName;
+        if (updateCustomerDto.lastName) (user as any).lastName = updateCustomerDto.lastName;
+        if (updateCustomerDto.phone) (user as any).phone = updateCustomerDto.phone;
+        if (updateCustomerDto.profilePicture) (user as any).avatar = updateCustomerDto.profilePicture;
+        
+        await userRepo.save(user);
+        console.log(`✅ Profil User synchronisé pour ${customer.email}`);
+      }
+    } catch (e) {
+      console.error("❌ Erreur lors de la synchronisation User:", e.message);
+    }
+
+    return saved;
   }
 
   async remove(id: string): Promise<void> {

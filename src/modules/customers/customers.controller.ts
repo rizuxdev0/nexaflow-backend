@@ -10,6 +10,7 @@ import {
   HttpStatus,
   HttpCode,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,10 +27,13 @@ import { UpdatePointsDto } from './dto/update-points.dto';
 import { Customer } from './entities/customer.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @ApiTags('customers')
 @Controller('customers')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
@@ -89,6 +93,24 @@ export class CustomersController {
   @ApiResponse({ status: 404, description: 'Client non trouvé' })
   findByEmail(@Param('email') email: string): Promise<Customer> {
     return this.customersService.findByEmail(email);
+  }
+
+  @Get('me')
+  @ApiOperation({ summary: "Récupérer mon propre profil client" })
+  @ApiResponse({ status: 200, description: 'Profil trouvé' })
+  async findMe(@CurrentUser() user: any): Promise<Customer> {
+    return this.customersService.findByEmail(user.email);
+  }
+
+  @Patch('me')
+  @ApiOperation({ summary: "Mettre à jour mon propre profil client" })
+  @ApiResponse({ status: 200, description: 'Profil mis à jour' })
+  async updateMe(
+    @CurrentUser() user: any,
+    @Body() updateCustomerDto: UpdateCustomerDto,
+  ): Promise<Customer> {
+    const customer = await this.customersService.findByEmail(user.email);
+    return this.customersService.update(customer.id, updateCustomerDto);
   }
 
   @Get(':id')

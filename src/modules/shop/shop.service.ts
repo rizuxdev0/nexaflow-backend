@@ -59,6 +59,7 @@ export class ShopService {
     pageSize: number = 20,
     search?: string,
     categoryId?: string,
+    categorySlug?: string,
     minPrice?: number,
     maxPrice?: number,
     inStock?: boolean,
@@ -67,8 +68,7 @@ export class ShopService {
     const queryBuilder = this.productsRepository
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.category', 'category')
-      .where('product.isActive = :isActive', { isActive: true })
-      .andWhere('product.stock > 0'); // Seulement les produits en stock
+      .where('product.isActive = :isActive', { isActive: true });
 
     if (search) {
       queryBuilder.andWhere(
@@ -79,6 +79,10 @@ export class ShopService {
 
     if (categoryId) {
       queryBuilder.andWhere('product.categoryId = :categoryId', { categoryId });
+    }
+
+    if (categorySlug) {
+      queryBuilder.andWhere('category.slug = :categorySlug', { categorySlug });
     }
 
     if (minPrice !== undefined) {
@@ -283,7 +287,8 @@ export class ShopService {
         notes: createOrderDto.notes,
         subtotal,
         taxTotal,
-        total,
+        discountTotal: createOrderDto.discountTotal || 0,
+        total: total - (createOrderDto.discountTotal || 0),
         status: OrderStatus.CONFIRMED,
         paymentStatus: PaymentStatus.PAID,
         paymentMethod: createOrderDto.paymentMethod,

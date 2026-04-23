@@ -20,7 +20,7 @@ export class NotificationsController {
     @Query() query: NotificationFilterDto,
     @CurrentUser() user: any
   ) {
-    const isCustomer = user.roles?.includes('customer');
+    const isCustomer = user.roles?.includes('customer') || user.role === 'customer' || user.role?.name === 'customer';
     
     if (isCustomer) {
       // Shoppers: see only their own and never admin notifications
@@ -57,10 +57,12 @@ export class NotificationsController {
 
   @Post('mark-all-read')
   markAllRead(@CurrentUser() user: any) {
-    const isCustomer = user.role?.name === 'customer' || user.role === 'customer';
+    const isCustomer = user.roles?.includes('customer') || user.role === 'customer' || user.role?.name === 'customer';
     if (isCustomer) {
       return this.notificationService.markAllRead(undefined, user.id);
     }
+    // Admins only mark their own notifications as read or global ones without customerId nor userId. 
+    // This allows them to mark all admin notifications. If they pass user.id, they only mark their specific ones.
     return this.notificationService.markAllRead(user.id);
   }
 

@@ -18,6 +18,10 @@ export enum ShopPaymentMethod {
   MOBILE_MONEY = 'mobile_money',
   BANK_TRANSFER = 'bank_transfer',
   CASH_ON_DELIVERY = 'cash_on_delivery',
+  // Alias short IDs (may be stored in store config)
+  MOBILE = 'mobile',
+  TRANSFER = 'transfer',
+  CASH = 'cash',
 }
 
 class ShopOrderItemDto {
@@ -83,6 +87,16 @@ export class CreateShopOrderDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @ApiPropertyOptional({ description: 'Code promotionnel' })
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
+
+  @ApiPropertyOptional({ description: 'Montant de la réduction' })
+  @IsNumber()
+  @IsOptional()
+  discountTotal?: number;
 
   @ApiProperty({ type: [ShopOrderItemDto], description: 'Articles commandés' })
   @IsArray()

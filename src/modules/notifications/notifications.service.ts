@@ -115,11 +115,23 @@ export class NotificationsService {
   }
 
   async markAllRead(userId?: string, customerId?: string) {
-    const where: any = { isRead: false };
-    if (userId) where.userId = userId;
-    if (customerId) where.customerId = customerId;
-    
-    return this.notificationRepository.update(where, { isRead: true });
+    const qb = this.notificationRepository.createQueryBuilder()
+      .update(Notification)
+      .set({ isRead: true })
+      .where('isRead = :isRead', { isRead: false });
+
+    if (customerId) {
+       qb.andWhere('customerId = :customerId', { customerId });
+    } else if (userId) {
+       // Admins mark their specific ones OR general ones (userId IS NULL)
+       qb.andWhere('(userId = :userId OR userId IS NULL)', { userId });
+       qb.andWhere('customerId IS NULL'); // Don't mark customer notifications!
+    } else {
+       // Fallback
+       qb.andWhere('customerId IS NULL');
+    }
+
+    return qb.execute();
   }
 
   async remove(id: string) {
