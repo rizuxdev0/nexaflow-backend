@@ -22,6 +22,13 @@ export class PromosController {
     return this.promosService.findAll(query);
   }
 
+  @Get('public')
+  @Public()
+  @ApiOperation({ summary: 'Liste publique des promotions actives' })
+  findPublic() {
+    return this.promosService.findAll({ active: true });
+  }
+
   @Get(':id')
   @Permissions('promos.read')
   findOne(@Param('id') id: string) {
