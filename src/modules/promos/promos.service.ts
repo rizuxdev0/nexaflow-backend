@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { PromoCode, PromoType } from './entities/promo.entity';
@@ -53,6 +53,10 @@ export class PromosService {
       throw new BadRequestException(`Ce code nécessite un montant minimum de ${promo.minOrderAmount}`);
     }
 
+    if (promo.customerId && promo.customerId !== dto.customerId) {
+      throw new ForbiddenException('Ce code promo est réservé à un autre client');
+    }
+
     // Logic for applicableProducts and applicableCategories should be handled in checkout?
     // Usually, we return the promo details and the frontend/checkout-service applies it.
     
@@ -92,5 +96,17 @@ export class PromosService {
   async remove(id: string) {
     const promo = await this.findOne(id);
     return this.promoRepository.remove(promo);
+  }
+
+  async generatePersonalizedCode(customer: { firstName: string; lastName: string }) {
+    const initials = (customer.firstName[0] + (customer.lastName[0] || '')).toUpperCase();
+    const random = Math.floor(1000 + Math.random() * 9000); // 4 chiffres aléatoires
+    const code = `${initials}${random}`;
+    
+    // Vérifier l'unicité
+    const existing = await this.promoRepository.findOne({ where: { code } });
+    if (existing) return this.generatePersonalizedCode(customer); // Réessayer si existe
+    
+    return code;
   }
 }

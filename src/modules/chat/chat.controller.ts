@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Patch,
+  Delete,
   UseGuards,
   ForbiddenException,
 } from '@nestjs/common';
@@ -71,11 +72,16 @@ export class ChatController {
     return this.chatService.closeConversation(id);
   }
 
-  @Public()
   @Get('conversations/:id/messages')
   @ApiOperation({ summary: 'Get messages for a conversation' })
   async getMessages(@Param('id') id: string) {
     console.log('ChatController: Fetching messages for:', id);
     return this.chatService.getMessages(id);
+  }
+
+  @Delete('messages/:id')
+  @ApiOperation({ summary: 'Delete a message' })
+  async deleteMessage(@Param('id') id: string) {
+    return this.chatService.deleteMessage(id);
   }
 }

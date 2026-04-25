@@ -29,13 +29,21 @@ export class TransformInterceptor<T> implements NestInterceptor<
     const response = ctx.getResponse();
 
     return next.handle().pipe(
-      map((data) => ({
-        statusCode: response.statusCode,
-        message: data?.message || 'Success',
-        data: data,
-        timestamp: new Date().toISOString(),
-        path: request.url,
-      })),
+      map((data) => {
+        // Si les headers sont déjà envoyés (ex: export de fichier avec res.end()), 
+        // on ne doit pas wrapper la réponse sinon ça corrompt le binaire.
+        if (response.headersSent) {
+          return data;
+        }
+
+        return {
+          statusCode: response.statusCode,
+          message: data?.message || 'Success',
+          data: data,
+          timestamp: new Date().toISOString(),
+          path: request.url,
+        };
+      }),
     );
   }
 }

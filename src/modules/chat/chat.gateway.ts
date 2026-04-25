@@ -103,4 +103,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     return enrichedMessage;
   }
+
+  @SubscribeMessage('deleteMessage')
+  async handleDeleteMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { messageId: string; conversationId: string },
+  ) {
+    // Notify everyone in the room that a message was deleted
+    this.server.to(data.conversationId).emit('messageDeleted', { messageId: data.messageId });
+    return { status: 'success' };
+  }
 }

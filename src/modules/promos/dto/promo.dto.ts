@@ -56,6 +56,10 @@ export class CreatePromoDto {
   @IsArray()
   @IsOptional()
   applicableCategories?: string[];
+
+  @IsString()
+  @IsOptional()
+  customerId?: string;
 }
 
 export class ValidatePromoDto {
@@ -71,4 +75,8 @@ export class ValidatePromoDto {
   @IsArray()
   @IsOptional()
   items?: { productId: string; categoryId: string; quantity: number; price: number }[];
+
+  @IsString()
+  @IsOptional()
+  customerId?: string;
 }

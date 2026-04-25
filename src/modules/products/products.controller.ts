@@ -11,7 +11,9 @@ import {
   HttpCode,
   Put,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import * as express from 'express';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { PermissionsGuard } from 'src/common/guards/permissions.guard';
@@ -26,6 +28,7 @@ import {
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ProductsExportService } from './products-export.service';
 import { UpdateStockDto } from './dto/update-stock.dto';
 import { Product } from './entities/product.entity';
 import { ProductFilterDto } from './dto/product-filter.dto';
@@ -45,7 +48,23 @@ export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly variantsService: VariantsService,
+    private readonly exportService: ProductsExportService,
   ) {}
+
+  // ============ EXPORTS ============
+  @Get('export/excel')
+  @Permissions('products.read')
+  @ApiOperation({ summary: 'Exporter tous les produits en Excel' })
+  async exportExcel(@Res() res: express.Response) {
+    await this.exportService.exportToExcel(res);
+  }
+
+  @Get('export/pdf')
+  @Permissions('products.read')
+  @ApiOperation({ summary: 'Exporter tous les produits en PDF' })
+  async exportPdf(@Res() res: express.Response) {
+    await this.exportService.exportToPdf(res);
+  }
 
   // ============ ENDPOINTS POUR PRODUITS ============
   @Post()

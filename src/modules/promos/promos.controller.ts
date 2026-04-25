@@ -34,6 +34,13 @@ export class PromosController {
     return this.promosService.validateCode(dto);
   }
 
+  @Post('generate-code')
+  @Permissions('promos.update')
+  @ApiOperation({ summary: 'Générer un code basé sur les initiales d\'un client' })
+  generateCode(@Body() body: { firstName: string; lastName: string }) {
+    return this.promosService.generatePersonalizedCode(body);
+  }
+
   @Post()
   @Permissions('promos.update')
   create(@Body() dto: CreatePromoDto) {

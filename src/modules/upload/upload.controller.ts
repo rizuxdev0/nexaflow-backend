@@ -48,7 +48,7 @@ export class UploadController {
         cb(null, true);
       },
       limits: {
-        fileSize: 5 * 1024 * 1024, // 5 MB
+        fileSize: 50 * 1024 * 1024, // 50 MB
       },
     }),
   )
@@ -88,7 +88,7 @@ export class UploadController {
         },
       }),
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10 MB
+        fileSize: 50 * 1024 * 1024, // 50 MB
       },
     }),
   )

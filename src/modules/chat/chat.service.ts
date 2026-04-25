@@ -29,8 +29,8 @@ export class ChatService {
     if ((data.type === 'support' || !data.type) && (data.customerId || data.customerEmail)) {
       const existing = await this.conversationRepo.findOne({
         where: [
-          { customerId: data.customerId, status: 'active', type: 'support' },
-          { customerEmail: data.customerEmail, status: 'active', type: 'support' }
+          ...(data.customerId ? [{ customerId: data.customerId, status: 'active' as any, type: 'support' as any }] : []),
+          ...(data.customerEmail ? [{ customerEmail: data.customerEmail, status: 'active' as any, type: 'support' as any }] : [])
         ],
         order: { updatedAt: 'DESC' }
       });
@@ -105,5 +105,12 @@ export class ChatService {
       where: { conversationId },
       order: { createdAt: 'ASC' },
     });
+  }
+
+  async deleteMessage(id: string) {
+    const message = await this.messageRepo.findOne({ where: { id } });
+    if (!message) throw new NotFoundException('Message introuvable');
+    await this.messageRepo.remove(message);
+    return message;
   }
 }

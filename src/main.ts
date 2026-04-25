@@ -103,6 +103,10 @@ import { port } from './common/variable/global';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Augmenter la limite de taille du corps des requêtes pour les uploads
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
   // ============ GLOBAL CONFIGURATION ============
 
   // 1. Global prefix pour toutes les routes

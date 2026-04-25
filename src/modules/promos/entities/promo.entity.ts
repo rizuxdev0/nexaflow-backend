@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Customer } from '../../customers/entities/customer.entity';
 
 export enum PromoType {
   PERCENTAGE = 'percentage',
@@ -58,6 +61,13 @@ export class PromoCode {
 
   @Column({ type: 'simple-array', nullable: true })
   applicableCategories: string[];
+
+  @ManyToOne(() => Customer, { nullable: true })
+  @JoinColumn({ name: 'customerId' })
+  customer: Customer;
+
+  @Column({ nullable: true })
+  customerId: string;
 
   @CreateDateColumn()
   createdAt: Date;
