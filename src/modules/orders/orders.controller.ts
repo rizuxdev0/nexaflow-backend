@@ -124,6 +124,7 @@ export class OrdersController {
     return this.ordersService.getStats(
       filterDto.status,
       filterDto.paymentStatus,
+      filterDto.paymentMethod,
       filterDto.customerId,
       filterDto.userId,
       filterDto.search || filterDto.orderNumber,

@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Between } from 'typeorm';
@@ -40,6 +42,7 @@ import { CustomersService } from '../customers/customers.service';
 
 import { CommissionService } from '../vendors/commission.service';
 import { StoreConfigService } from '../store-config/store-config.service';
+import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class OrdersService {
@@ -66,6 +69,8 @@ export class OrdersService {
     private customersService: CustomersService,
     private commissionService: CommissionService,
     private storeConfigService: StoreConfigService,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
   ) {}
 
   //   async createPosOrder(
@@ -461,6 +466,8 @@ export class OrdersService {
         link: `/admin/orders`
       });
 
+      this.chatGateway.emitNewOrder(savedOrder);
+
       await this.processLoyalty(savedOrder);
 
       await queryRunner.commitTransaction();
@@ -601,6 +608,8 @@ export class OrdersService {
         message: `Une commande #${savedOrder.orderNumber} vient d'être reçue de la part de ${savedOrder.customerName}`,
         link: `/admin/orders`
       });
+
+      this.chatGateway.emitNewOrder(savedOrder);
 
       await this.processLoyalty(savedOrder);
 
@@ -778,6 +787,7 @@ export class OrdersService {
   async getStats(
     status?: OrderStatus,
     paymentStatus?: PaymentStatus,
+    paymentMethod?: string,
     customerId?: string,
     userId?: string,
     search?: string,
@@ -788,6 +798,7 @@ export class OrdersService {
 
     if (status && (status as any) !== 'all') qb.andWhere('o.status = :status', { status });
     if (paymentStatus && (paymentStatus as any) !== 'all') qb.andWhere('o.paymentStatus = :paymentStatus', { paymentStatus });
+    if (paymentMethod && paymentMethod !== 'all') qb.andWhere('o.paymentMethod = :paymentMethod', { paymentMethod });
     if (customerId) qb.andWhere('o.customerId = :customerId', { customerId });
     if (userId) qb.andWhere('o.userId = :userId', { userId });
     if (search) {

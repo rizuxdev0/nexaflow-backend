@@ -33,16 +33,30 @@ export class PromosService {
   }
 
   async findByCode(code: string) {
-    return this.promoRepository.findOne({ where: { code, isActive: true } });
+    const trimmedCode = code.trim();
+    return this.promoRepository
+      .createQueryBuilder('promo')
+      .where('LOWER(promo.code) = LOWER(:code)', { code: trimmedCode })
+      .getOne();
   }
 
   async validateCode(dto: ValidatePromoDto) {
     const promo = await this.findByCode(dto.code);
-    if (!promo) throw new BadRequestException('Code invalide ou expiré');
+    
+    if (!promo) {
+      throw new BadRequestException(`Le code "${dto.code}" n'existe pas.`);
+    }
+
+    if (!promo.isActive) {
+      throw new BadRequestException('Ce code promo a été désactivé.');
+    }
 
     const now = new Date();
-    if (now < promo.startDate || now > promo.endDate) {
-      throw new BadRequestException('Ce code n\'est pas actif actuellement');
+    if (promo.startDate && now < new Date(promo.startDate)) {
+      throw new BadRequestException(`Ce code ne sera actif qu'à partir du ${new Date(promo.startDate).toLocaleDateString()}`);
+    }
+    if (promo.endDate && now > new Date(promo.endDate)) {
+      throw new BadRequestException('Ce code a expiré.');
     }
 
     if (promo.usageLimit > 0 && promo.usedCount >= promo.usageLimit) {
@@ -70,7 +84,7 @@ export class PromosService {
       discountAmount = Number(promo.value);
     }
 
-    return { isValid: true, discountAmount, promo };
+    return { valid: true, discount: discountAmount, promo };
   }
 
   async incrementUsage(id: string) {
@@ -83,12 +97,19 @@ export class PromosService {
     const existing = await this.promoRepository.findOne({ where: { code: dto.code } });
     if (existing) throw new BadRequestException('Ce code existe déjà');
 
+    // Nettoyage des champs UUID vides
+    if (dto.customerId === '') dto.customerId = undefined;
+
     const promo = this.promoRepository.create(dto);
     return this.promoRepository.save(promo);
   }
 
   async update(id: string, dto: Partial<CreatePromoDto>) {
     const promo = await this.findOne(id);
+    
+    // Nettoyage des champs UUID vides
+    if (dto.customerId === '') dto.customerId = undefined;
+
     Object.assign(promo, dto);
     return this.promoRepository.save(promo);
   }

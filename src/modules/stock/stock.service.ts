@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { StockMovement, StockMovementType } from './entities/stock-movement.entity';
@@ -6,6 +6,7 @@ import { Product } from '../products/entities/product.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ChatGateway } from '../chat/chat.gateway';
 
 
 @Injectable()
@@ -17,6 +18,8 @@ export class StockService {
     private readonly productRepository: Repository<Product>,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway,
   ) {}
 
   async createMovement(data: {
@@ -59,6 +62,7 @@ export class StockService {
     // Alert if stock is too low (< 10)
     if (newStock < 10) {
       await this.notificationsService.notifyLowStock(product.name, product.sku, newStock);
+      this.chatGateway.emitLowStock({ name: product.name, sku: product.sku, stock: newStock });
     }
 
     // Log audit

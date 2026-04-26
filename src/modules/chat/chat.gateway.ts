@@ -113,4 +113,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.server.to(data.conversationId).emit('messageDeleted', { messageId: data.messageId });
     return { status: 'success' };
   }
+
+  // --- GLOBAL ALERTS ---
+  emitNewOrder(order: any) {
+    this.server.emit('newOrder', order);
+  }
+
+  emitLowStock(product: any) {
+    this.server.emit('lowStock', product);
+  }
 }
