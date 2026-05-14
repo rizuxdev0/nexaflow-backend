@@ -21,12 +21,16 @@ export class BatchesService {
     private readonly auditService: AuditService,
   ) {}
 
-  async findAll(query: { page?: number; pageSize?: number; status?: string; warehouseId?: string, productId?: string }) {
-    const { page = 1, pageSize = 20, status, warehouseId, productId } = query;
+  async findAll(query: { page?: number; pageSize?: number; status?: string; warehouseId?: string, productId?: string, batchNumber?: string, search?: string }) {
+    const { page = 1, pageSize = 20, status, warehouseId, productId, batchNumber, search } = query;
     const where: any = {};
     if (status) where.status = status;
     if (warehouseId) where.warehouseId = warehouseId;
     if (productId) where.productId = productId;
+    if (batchNumber) where.batchNumber = batchNumber;
+    if (search) {
+      where.batchNumber = search; // Simplification, in reality might want to use ILike or Like
+    }
 
     const [data, total] = await this.batchRepository.findAndCount({
       where,

@@ -8,6 +8,8 @@ import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Query } from '@nestjs/common';
 
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -22,14 +24,17 @@ export class StoreConfigController {
   @Get()
   @UseInterceptors(CacheInterceptor)
   @CacheTTL(3600)
-  get() {
-    return this.storeConfigService.get();
+  get(@Query('vendorId') vendorId?: string) {
+    return this.storeConfigService.get(vendorId);
   }
 
   @Put()
   @Roles('admin', 'manager')
   @Permissions('store_config.update')
-  update(@Body() updateStoreConfigDto: UpdateStoreConfigDto) {
-    return this.storeConfigService.update(updateStoreConfigDto);
+  update(
+    @Body() updateStoreConfigDto: UpdateStoreConfigDto,
+    @CurrentUser('vendorId') vendorId: string
+  ) {
+    return this.storeConfigService.update(updateStoreConfigDto, vendorId);
   }
 }

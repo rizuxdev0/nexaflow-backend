@@ -11,6 +11,7 @@ import {
 import { Register } from '../../registers/entities/register.entity';
 import { Order } from '../../orders/entities/order.entity';
 import { User } from 'src/modules/users/entities/user.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 export enum SessionStatus {
   OPEN = 'open',
@@ -87,6 +88,13 @@ export class CashSession {
 
   @OneToMany(() => Order, (order) => order.session)
   orders: Order[];
+
+  @ManyToOne(() => Vendor)
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @CreateDateColumn()
   createdAt: Date;

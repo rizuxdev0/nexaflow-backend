@@ -7,10 +7,11 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ChatGateway } from '../chat/chat.gateway';
-
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class StockService {
+export class StockService extends AbstractTenantService<StockMovement> {
   constructor(
     @InjectRepository(StockMovement)
     private readonly movementRepository: Repository<StockMovement>,
@@ -18,9 +19,14 @@ export class StockService {
     private readonly productRepository: Repository<Product>,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    tenantService: TenantService,
     @Inject(forwardRef(() => ChatGateway))
     private readonly chatGateway: ChatGateway,
-  ) {}
+  ) {
+    super(movementRepository, tenantService, 'StockMovement');
+  }
+
+  private get productsRepo() { return this.tenantRepo(this.productRepository); }
 
   async createMovement(data: {
     productId: string;
@@ -32,13 +38,15 @@ export class StockService {
     userId?: string;
     allowNegative?: boolean;
   }) {
-    const product = await this.productRepository.findOne({ where: { id: data.productId } });
+    const product = await this.productsRepo.findOne({
+      where: { id: data.productId },
+    });
     if (!product) throw new NotFoundException('Produit non trouvé');
 
     const oldStock = Number(product.stock);
     let newStock = oldStock;
 
-    if (data.type === StockMovementType.IN || data.type === StockMovementType.RETURN || data.type === StockMovementType.PURCHASE) {
+    if ([StockMovementType.IN, StockMovementType.RETURN, StockMovementType.PURCHASE].includes(data.type)) {
       newStock += data.quantity;
     } else {
       newStock -= data.quantity;
@@ -47,20 +55,21 @@ export class StockService {
       }
     }
 
-    // Update product stock
+    // Update product stock (via proxied repo)
     product.stock = newStock;
-    await this.productRepository.save(product);
+    await this.productsRepo.save(product);
 
     // Record movement
-    const movement = this.movementRepository.create({
+    const movement = this.repo.create({
       ...data,
       oldStock,
       newStock,
+      vendorId: this.tenantService.getVendorId() || product.vendorId,
     });
-    const saved = await this.movementRepository.save(movement);
+    const saved = await this.repo.save(movement);
 
-    // Alert if stock is too low (< 10)
-    if (newStock < 10) {
+    // Alert if stock is too low
+    if (newStock < (product.minStock || 10)) {
       await this.notificationsService.notifyLowStock(product.name, product.sku, newStock);
       this.chatGateway.emitLowStock({ name: product.name, sku: product.sku, stock: newStock });
     }
@@ -68,12 +77,12 @@ export class StockService {
     // Log audit
     await this.auditService.log({
       userId: data.userId,
-      userName: 'Système', // In real, should pass user name
+      userName: 'Système',
       action: AuditAction.UPDATE,
       resource: 'Stock',
-
       resourceId: product.id,
-      details: `Changement stock ${product.name} (${product.sku}) : ${oldStock} → ${newStock} (${data.type === StockMovementType.IN ? '+' : '-'}${data.quantity}). Raison : ${data.reason}`
+      details: `Changement stock ${product.name} (${product.sku}) : ${oldStock} → ${newStock} (${[StockMovementType.IN, StockMovementType.RETURN, StockMovementType.PURCHASE].includes(data.type) ? '+' : '-'}${data.quantity}). Raison : ${data.reason}`,
+      vendorId: movement.vendorId,
     });
 
     return saved;
@@ -83,11 +92,11 @@ export class StockService {
     const where: any = {};
     if (productId) where.productId = productId;
 
-    const [data, total] = await this.movementRepository.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC' } as any,
       relations: ['product', 'user', 'warehouse']
     });
 
@@ -98,15 +107,13 @@ export class StockService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const movements = await this.movementRepository.find({
+    const movements = await this.repo.find({
       where: {
         createdAt: Between(startDate, new Date())
-      },
-      order: { createdAt: 'ASC' }
+      } as any,
+      order: { createdAt: 'ASC' } as any
     });
 
-    // Strategy: group by date?
-    // Frontend expects daily totals for 'in' and 'out'
     const chartMap = new Map<string, { in: number; out: number }>();
     
     movements.forEach(m => {

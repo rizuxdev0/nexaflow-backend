@@ -1,5 +1,12 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { Branch } from '../../branches/entities/branch.entity';
+import { Warehouse } from '../../warehouses/entities/warehouse.entity';
+import { Customer } from '../../customers/entities/customer.entity';
+import { Order } from '../../orders/entities/order.entity';
+import { Category } from '../../categories/entities/category.entity';
+import { Product } from '../../products/entities/product.entity';
+import { StoreConfig } from '../../store-config/entities/store-config.entity';
 
 export enum VendorStatus {
   PENDING = 'pending',
@@ -126,4 +133,28 @@ export class Vendor {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @OneToMany(() => User, (user) => user.vendor)
+  users: User[];
+
+  @OneToMany(() => Branch, (branch) => branch.vendor)
+  branches: Branch[];
+
+  @OneToMany(() => Warehouse, (warehouse) => warehouse.vendor)
+  warehouses: Warehouse[];
+
+  @OneToMany(() => Customer, (customer) => customer.vendor)
+  customers: Customer[];
+
+  @OneToMany(() => Order, (order) => order.vendor)
+  orders: Order[];
+
+  @OneToMany(() => Category, (category) => category.vendor)
+  categories: Category[];
+
+  @OneToMany(() => Product, (product) => product.vendor)
+  products: Product[];
+
+  @OneToOne(() => StoreConfig, (config) => config.vendor)
+  storeConfig: StoreConfig;
 }

@@ -4,6 +4,7 @@ import { CreateWarehouseDto, UpdateWarehouseDto } from './dto/warehouse.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { QuotaGuard, CheckQuota } from '../../common/guards/quota.guard';
 
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -32,6 +33,8 @@ export class WarehousesController {
   @Post()
   @Roles('admin', 'super_admin')
   @Permissions('stock.update')
+  @UseGuards(QuotaGuard)
+  @CheckQuota('warehouses')
   create(@Body() dto: CreateWarehouseDto) {
     return this.warehousesService.create(dto);
   }

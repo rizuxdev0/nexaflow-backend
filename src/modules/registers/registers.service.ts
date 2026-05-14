@@ -12,6 +12,7 @@ import { CreateRegisterDto } from './dto/create-register.dto';
 import { UpdateRegisterDto } from './dto/update-register.dto';
 import { CashSessionsService } from '../cash-sessions/cash-sessions.service';
 import { CashSession } from '../cash-sessions/entities/cash-session.entity';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class RegistersService implements OnModuleInit {
@@ -19,6 +20,7 @@ export class RegistersService implements OnModuleInit {
     @InjectRepository(Register)
     private registersRepository: Repository<Register>,
     private cashSessionsService: CashSessionsService,
+    private tenantService: TenantService,
   ) {}
 
   async onModuleInit() {
@@ -40,9 +42,10 @@ export class RegistersService implements OnModuleInit {
   }
 
   async create(createRegisterDto: CreateRegisterDto): Promise<Register> {
+    const vendorId = this.tenantService.getVendorId();
     // Vérifier si le code existe déjà
     const existingCode = await this.registersRepository.findOne({
-      where: { code: createRegisterDto.code },
+      where: { code: createRegisterDto.code, vendorId: vendorId || undefined },
     });
 
     if (existingCode) {
@@ -54,17 +57,21 @@ export class RegistersService implements OnModuleInit {
     // Si c'est une caisse principale, retirer le flag des autres
     if (createRegisterDto.isMain) {
       await this.registersRepository.update(
-        { isMain: true },
+        { isMain: true, vendorId: vendorId || undefined },
         { isMain: false },
       );
     }
 
-    const register = this.registersRepository.create(createRegisterDto);
+    const register = this.registersRepository.create({
+      ...createRegisterDto,
+      vendorId: vendorId || undefined
+    });
     return await this.registersRepository.save(register);
   }
 
   async findAll(isActive?: boolean): Promise<Register[]> {
-    const where: FindOptionsWhere<Register> = {};
+    const vendorId = this.tenantService.getVendorId();
+    const where: FindOptionsWhere<Register> = { vendorId: vendorId || undefined };
 
     if (isActive !== undefined) {
       where.isActive = isActive;
@@ -95,8 +102,9 @@ export class RegistersService implements OnModuleInit {
   }
 
   async findOne(id: string): Promise<Register> {
+    const vendorId = this.tenantService.getVendorId();
     const register = await this.registersRepository.findOne({
-      where: { id },
+      where: { id, vendorId: vendorId || undefined },
       relations: ['sessions'],
     });
 
@@ -118,8 +126,9 @@ export class RegistersService implements OnModuleInit {
   }
 
   async findByCode(code: string): Promise<Register> {
+    const vendorId = this.tenantService.getVendorId();
     const register = await this.registersRepository.findOne({
-      where: { code },
+      where: { code, vendorId: vendorId || undefined },
     });
 
     if (!register) {
@@ -130,8 +139,9 @@ export class RegistersService implements OnModuleInit {
   }
 
   async getMainRegister(): Promise<Register> {
+    const vendorId = this.tenantService.getVendorId();
     const mainRegister = await this.registersRepository.findOne({
-      where: { isMain: true, isActive: true },
+      where: { isMain: true, isActive: true, vendorId: vendorId || undefined },
     });
 
     if (!mainRegister) {
@@ -145,12 +155,13 @@ export class RegistersService implements OnModuleInit {
     id: string,
     updateRegisterDto: UpdateRegisterDto,
   ): Promise<Register> {
+    const vendorId = this.tenantService.getVendorId();
     const register = await this.findOne(id);
 
     // Vérifier l'unicité du code si modifié
     if (updateRegisterDto.code && updateRegisterDto.code !== register.code) {
       const existingCode = await this.registersRepository.findOne({
-        where: { code: updateRegisterDto.code },
+        where: { code: updateRegisterDto.code, vendorId: vendorId || undefined },
       });
 
       if (existingCode && existingCode.id !== id) {
@@ -160,10 +171,9 @@ export class RegistersService implements OnModuleInit {
       }
     }
 
-    // Si on veut définir comme caisse principale
     if (updateRegisterDto.isMain && !register.isMain) {
       await this.registersRepository.update(
-        { isMain: true },
+        { isMain: true, vendorId: vendorId || undefined },
         { isMain: false },
       );
     } else if (updateRegisterDto.isMain === false && register.isMain) {

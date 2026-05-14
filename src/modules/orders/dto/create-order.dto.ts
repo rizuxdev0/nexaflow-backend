@@ -127,6 +127,11 @@ export class CreateOrderDto {
   discountTotal?: number;
 
   @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
+
+  @ApiPropertyOptional()
   @IsUUID()
   @IsOptional()
   customerId?: string;

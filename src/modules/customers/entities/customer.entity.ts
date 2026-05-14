@@ -5,8 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 @Entity('customers')
 export class Customer {
@@ -69,6 +72,13 @@ export class Customer {
 
   @Column({ nullable: true })
   lastOrderDate: Date;
+
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @OneToMany(() => Order, (order) => order.customer)
   orders: Order[];

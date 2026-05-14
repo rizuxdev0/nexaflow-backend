@@ -43,9 +43,11 @@ import { CustomersService } from '../customers/customers.service';
 import { CommissionService } from '../vendors/commission.service';
 import { StoreConfigService } from '../store-config/store-config.service';
 import { ChatGateway } from '../chat/chat.gateway';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class OrdersService {
+export class OrdersService extends AbstractTenantService<Order> {
   constructor(
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
@@ -69,187 +71,21 @@ export class OrdersService {
     private customersService: CustomersService,
     private commissionService: CommissionService,
     private storeConfigService: StoreConfigService,
+    tenantService: TenantService,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
-  ) {}
+  ) {
+    super(ordersRepository, tenantService, 'Order');
+  }
 
-  //   async createPosOrder(
-  //     createPosOrderDto: CreatePosOrderDto,
-  //     userId: string,
-  //   ): Promise<PosOrderResponseDto> {
-  //     const queryRunner = this.dataSource.createQueryRunner();
-  //     await queryRunner.connect();
-  //     await queryRunner.startTransaction();
+  // Proxied secondary repositories
+  private get orderItemsRepo() { return this.tenantRepo(this.orderItemsRepository); }
+  private get productsRepo() { return this.tenantRepo(this.productsRepository); }
+  private get variantsRepo() { return this.tenantRepo(this.variantsRepository); }
+  private get sessionsRepo() { return this.tenantRepo(this.sessionsRepository); }
+  private get bundlesRepo() { return this.tenantRepo(this.bundlesRepository); }
+  private get warehouseRepo() { return this.tenantRepo(this.warehouseRepository); }
 
-  //     try {
-  //       // 1. Vérifier que la session est ouverte
-  //       const session = await this.sessionsRepository.findOne({
-  //         where: { id: createPosOrderDto.sessionId, status: SessionStatus.OPEN },
-  //       });
-
-  //       if (!session) {
-  //         throw new BadRequestException(
-  //           'Session de caisse non trouvée ou fermée',
-  //         );
-  //       }
-
-  //       // 2. Calculer le sous-total depuis les prix en base
-  //       const { items, subtotal } = await this.calculateItemsSubtotal(
-  //         createPosOrderDto.items,
-  //       );
-
-  //       // 3. Calculer la remise
-  //       let discountAmount = 0;
-  //       if (createPosOrderDto.discountType && createPosOrderDto.discountValue) {
-  //         if (createPosOrderDto.discountType === DiscountType.PERCENTAGE) {
-  //           if (createPosOrderDto.discountValue > 100) {
-  //             throw new BadRequestException(
-  //               'Le pourcentage de remise ne peut pas dépasser 100%',
-  //             );
-  //           }
-  //           discountAmount = Math.round(
-  //             subtotal * (createPosOrderDto.discountValue / 100),
-  //           );
-  //         } else if (createPosOrderDto.discountType === DiscountType.FIXED) {
-  //           if (createPosOrderDto.discountValue > subtotal) {
-  //             throw new BadRequestException(
-  //               'La remise fixe ne peut pas dépasser le sous-total',
-  //             );
-  //           }
-  //           discountAmount = createPosOrderDto.discountValue;
-  //         }
-  //       }
-
-  //       const afterDiscount = subtotal - discountAmount;
-
-  //       // 4. Calculer la TVA (18% par défaut)
-  //       const taxRate = 0.18;
-  //       const taxAmount = Math.round(afterDiscount * taxRate);
-  //       const total = afterDiscount + taxAmount;
-
-  //       // 5. Vérifier le montant remis pour les espèces
-  //       let change = 0;
-  //       if (createPosOrderDto.paymentMethod === PaymentMethod.CASH) {
-  //         if (!createPosOrderDto.tenderedAmount) {
-  //           throw new BadRequestException(
-  //             'Le montant remis est requis pour les paiements en espèces',
-  //           );
-  //         }
-  //         if (createPosOrderDto.tenderedAmount < total) {
-  //           throw new BadRequestException(
-  //             `Montant insuffisant. Total: ${total}, remis: ${createPosOrderDto.tenderedAmount}`,
-  //           );
-  //         }
-  //         change = createPosOrderDto.tenderedAmount - total;
-  //       }
-
-  //       // 6. Générer le numéro de commande
-  //       const orderNumber = await this.generateOrderNumber('POS');
-
-  //       // 7. Créer la commande
-  //       const order = this.ordersRepository.create({
-  //         orderNumber,
-  //         subtotal,
-  //         discountAmount,
-  //         taxAmount,
-  //         total,
-  //         status: OrderStatus.COMPLETED,
-  //         paymentStatus: PaymentStatus.PAID,
-  //         paymentMethod: createPosOrderDto.paymentMethod,
-  //         sessionId: createPosOrderDto.sessionId,
-  //         userId,
-  //         customerId: createPosOrderDto.customerId,
-  //         notes: createPosOrderDto.notes,
-  //         orderDate: new Date(),
-  //       });
-
-  //       const savedOrder = await queryRunner.manager.save(order);
-
-  //       // 8. Créer les items et décrémenter le stock
-  //       for (const item of items) {
-  //         const orderItem = this.orderItemsRepository.create({
-  //           orderId: savedOrder.id,
-  //           productId: item.productId,
-  //           variantId: item.variantId,
-  //           productName: item.product.name,
-  //           productSku: item.variant?.sku || item.product.sku,
-  //           quantity: item.quantity,
-  //           unitPrice: item.unitPrice,
-  //           totalPrice: item.unitPrice * item.quantity,
-  //           taxRate,
-  //           taxAmount: Math.round(item.unitPrice * item.quantity * taxRate),
-  //         });
-  //         await queryRunner.manager.save(orderItem);
-
-  //         // Décrémenter le stock
-  //         if (item.variant) {
-  //           item.variant.stock -= item.quantity;
-  //           await queryRunner.manager.save(item.variant);
-  //         } else {
-  //           item.product.stock -= item.quantity;
-  //           await queryRunner.manager.save(item.product);
-  //         }
-  //       }
-
-  //       // 9. Mettre à jour la session de caisse
-  //       session.salesCount += 1;
-  //       session.salesTotal = Number(session.salesTotal) + total;
-  //       if (createPosOrderDto.paymentMethod === PaymentMethod.CASH) {
-  //         session.cashIn = Number(session.cashIn) + total;
-  //       }
-
-  //       // Mettre à jour les statistiques de paiement
-  //       const paymentIndex = session.payments.findIndex(
-  //         (p) => p.method === createPosOrderDto.paymentMethod,
-  //       );
-  //       if (paymentIndex >= 0) {
-  //         session.payments[paymentIndex].count += 1;
-  //         session.payments[paymentIndex].total =
-  //           Number(session.payments[paymentIndex].total) + total;
-  //       } else {
-  //         session.payments.push({
-  //           method: createPosOrderDto.paymentMethod,
-  //           count: 1,
-  //           total: total,
-  //         });
-  //       }
-
-  //       await queryRunner.manager.save(session);
-
-  //       // 10. Audit log
-  //       await this.auditService.log({
-  //         userId,
-  //         userName: 'Utilisateur', // À remplacer par le vrai nom
-  //         action: AuditAction.SALE,
-  //         resource: 'Order',
-  //         resourceId: savedOrder.id,
-  //         details: `Vente POS #${orderNumber} - Total: ${total} FCFA`,
-  //         newData: savedOrder,
-  //       });
-
-  //       await queryRunner.commitTransaction();
-
-  //       return {
-  //         id: savedOrder.id,
-  //         orderNumber: savedOrder.orderNumber,
-  //         subtotal,
-  //         discountAmount,
-  //         afterDiscount,
-  //         taxAmount,
-  //         total,
-  //         paymentMethod: createPosOrderDto.paymentMethod,
-  //         tenderedAmount: createPosOrderDto.tenderedAmount,
-  //         change,
-  //         status: savedOrder.status,
-  //         createdAt: savedOrder.createdAt,
-  //       };
-  //     } catch (error) {
-  //       await queryRunner.rollbackTransaction();
-  //       throw error;
-  //     } finally {
-  //       await queryRunner.release();
-  //     }
-  //   }
   async createPosOrder(
     createPosOrderDto: CreatePosOrderDto,
     user: any,
@@ -261,50 +97,29 @@ export class OrdersService {
     await queryRunner.startTransaction();
 
     try {
-      // 1. Vérifier que la session est ouverte - CORRECTION ICI
-      const session = await this.sessionsRepository.findOne({
+      const session = await this.sessionsRepo.findOne({
         where: {
           id: createPosOrderDto.sessionId,
-          status: SessionStatus.OPEN, // ← Utilisation de l'enum
+          status: SessionStatus.OPEN,
         },
       });
 
       if (!session) {
-        throw new BadRequestException(
-          'Session de caisse non trouvée ou fermée',
-        );
+        throw new BadRequestException('Session de caisse non trouvée ou fermée');
       }
 
-      // 2. Calculer le sous-total depuis les prix en base
-      const { items, subtotal } = await this.calculateItemsSubtotal(
-        createPosOrderDto.items,
-      );
+      const { items, subtotal } = await this.calculateItemsSubtotal(createPosOrderDto.items);
 
-      // 3. Calculer la remise
-      let discountAmount = 0;
-      if (createPosOrderDto.discountType && createPosOrderDto.discountValue) {
+      let discountAmount = createPosOrderDto.discountTotal || 0;
+      if (!discountAmount && createPosOrderDto.discountType && createPosOrderDto.discountValue) {
         if (createPosOrderDto.discountType === DiscountType.PERCENTAGE) {
-          if (createPosOrderDto.discountValue > 100) {
-            throw new BadRequestException(
-              'Le pourcentage de remise ne peut pas dépasser 100%',
-            );
-          }
-          discountAmount = Math.round(
-            subtotal * (createPosOrderDto.discountValue / 100),
-          );
+          discountAmount = Math.round(subtotal * (createPosOrderDto.discountValue / 100));
         } else if (createPosOrderDto.discountType === DiscountType.FIXED) {
-          if (createPosOrderDto.discountValue > subtotal) {
-            throw new BadRequestException(
-              'La remise fixe ne peut pas dépasser le sous-total',
-            );
-          }
           discountAmount = createPosOrderDto.discountValue;
         }
       }
 
       const afterDiscount = subtotal - discountAmount;
-
-      // 4. Calculer la TVA à partir de la configuration globale
       const config = await this.storeConfigService.get();
       const currentTaxRate = (config.checkout.tax.defaultTaxRate || 18) / 100;
       const pricesIncludeTax = config.checkout.tax.pricesIncludeTax === true;
@@ -313,37 +128,22 @@ export class OrdersService {
       let total = 0;
 
       if (pricesIncludeTax) {
-        // Le sous-total calculé (subtotal) est déjà le montant final (TC)
         total = afterDiscount;
-        // La TVA est extraite du total pour l'information
         taxAmount = Math.round(total - (total / (1 + currentTaxRate)));
       } else {
-        // La TVA est ajoutée au montant (HT)
         taxAmount = Math.round(afterDiscount * currentTaxRate);
         total = afterDiscount + taxAmount;
       }
 
-      // 5. Vérifier le montant remis pour les espèces
-      let change = 0;
       if (createPosOrderDto.paymentMethod === PaymentMethod.CASH) {
-        if (!createPosOrderDto.tenderedAmount) {
-          throw new BadRequestException(
-            'Le montant remis est requis pour les paiements en espèces',
-          );
+        if (!createPosOrderDto.tenderedAmount || createPosOrderDto.tenderedAmount < total) {
+          throw new BadRequestException(`Montant insuffisant. Total: ${total}`);
         }
-        if (createPosOrderDto.tenderedAmount < total) {
-          throw new BadRequestException(
-            `Montant insuffisant. Total: ${total}, remis: ${createPosOrderDto.tenderedAmount}`,
-          );
-        }
-        change = createPosOrderDto.tenderedAmount - total;
       }
 
-      // 6. Générer le numéro de commande
       const orderNumber = await this.generateOrderNumber('POS');
 
-      // 7. Créer la commande
-      const order = this.ordersRepository.create({
+      const order = this.repo.create({
         orderNumber,
         subtotal,
         discountTotal: discountAmount,
@@ -357,15 +157,15 @@ export class OrdersService {
         customerId: createPosOrderDto.customerId,
         notes: createPosOrderDto.notes,
         orderDate: new Date(),
+        promoCode: createPosOrderDto.promoCode,
+        vendorId: this.tenantService.getVendorId() || undefined,
         statusHistory: [{ status: createPosOrderDto.status || OrderStatus.COMPLETED, timestamp: new Date() }],
       }) as Order;
 
       const savedOrder = await queryRunner.manager.save(order);
       const savedItems: any[] = [];
 
-      // 8. Créer les items et décrémenter le stock
       for (const item of items) {
-        // Calculate Marketplace Commission
         const commission = await this.commissionService.calculateCommission(
           item.product.vendorId,
           item.product.categoryId,
@@ -391,7 +191,6 @@ export class OrdersService {
         const savedItem = await queryRunner.manager.save(orderItem);
         savedItems.push(savedItem);
 
-        // Décrémenter le stock et créer un mouvement
         if (item.variant) {
           await this.stockService.createMovement({
             productId: item.productId,
@@ -404,7 +203,7 @@ export class OrdersService {
           item.variant.stock -= item.quantity;
           await queryRunner.manager.save(item.variant);
         } else if ((item as any).isBundle) {
-          const bundle = await this.bundlesRepository.findOne({ where: { id: item.productId } });
+          const bundle = await this.bundlesRepo.findOne({ where: { id: item.productId } });
           if (bundle) {
             bundle.stock -= item.quantity;
             await queryRunner.manager.save(bundle);
@@ -421,32 +220,22 @@ export class OrdersService {
         }
       }
 
-      // 9. Mettre à jour la session de caisse
       session.salesCount += 1;
       session.salesTotal = Number(session.salesTotal) + total;
       if (createPosOrderDto.paymentMethod === PaymentMethod.CASH) {
         session.cashIn = Number(session.cashIn) + total;
       }
 
-      // Mettre à jour les statistiques de paiement
-      const paymentIndex = session.payments.findIndex(
-        (p) => p.method === (createPosOrderDto.paymentMethod as string),
-      );
+      const paymentIndex = session.payments.findIndex((p) => p.method === (createPosOrderDto.paymentMethod as string));
       if (paymentIndex >= 0) {
         session.payments[paymentIndex].count += 1;
-        session.payments[paymentIndex].total =
-          Number(session.payments[paymentIndex].total) + total;
+        session.payments[paymentIndex].total = Number(session.payments[paymentIndex].total) + total;
       } else {
-        session.payments.push({
-          method: createPosOrderDto.paymentMethod,
-          count: 1,
-          total: total,
-        });
+        session.payments.push({ method: createPosOrderDto.paymentMethod, count: 1, total: total });
       }
 
       await queryRunner.manager.save(session);
 
-      // 10. Audit log
       await this.auditService.log({
         userId,
         userName,
@@ -457,7 +246,6 @@ export class OrdersService {
         newData: savedOrder,
       });
 
-      // Notification admin: Nouvelle vente POS
       await this.notificationsService.create({
         type: NotificationType.ORDER,
         userId: userId,
@@ -467,9 +255,7 @@ export class OrdersService {
       });
 
       this.chatGateway.emitNewOrder(savedOrder);
-
       await this.processLoyalty(savedOrder);
-
       await queryRunner.commitTransaction();
 
       return {
@@ -479,7 +265,7 @@ export class OrdersService {
         afterDiscount,
         taxAmount,
         tenderedAmount: createPosOrderDto.tenderedAmount,
-        change,
+        change: (createPosOrderDto.tenderedAmount || 0) - total,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -497,18 +283,12 @@ export class OrdersService {
     await queryRunner.startTransaction();
 
     try {
-      // 1. Calculate totals from DB unless explicitly provided (we still verify items exist)
-      const { items, subtotal: calculatedSubtotal } = await this.calculateItemsSubtotal(
-        createOrderDto.items,
-      );
-
-      // Use the calculated total if not provided
+      const { items, subtotal: calculatedSubtotal } = await this.calculateItemsSubtotal(createOrderDto.items);
       const config = await this.storeConfigService.get();
       const defaultTaxRate = (config.checkout.tax.defaultTaxRate || 18) / 100;
       const pricesIncludeTax = config.checkout.tax.pricesIncludeTax === true;
 
       const subtotal = createOrderDto.subtotal || calculatedSubtotal;
-      
       let taxTotal = 0;
       let total = 0;
       const discountTotal = createOrderDto.discountTotal || 0;
@@ -522,12 +302,10 @@ export class OrdersService {
         total = createOrderDto.total || (afterDiscount + taxTotal);
       }
 
-      // 2. Generate order number
       const prefix = createOrderDto.source === 'ecommerce' ? 'WEB' : 'CMD';
       const orderNumber = await this.generateOrderNumber(prefix);
 
-      // 3. Create the order
-      const order = this.ordersRepository.create({
+      const order = this.repo.create({
         orderNumber,
         subtotal,
         discountTotal,
@@ -545,14 +323,14 @@ export class OrdersService {
         shippingLongitude: createOrderDto.shippingLongitude,
         notes: createOrderDto.notes,
         orderDate: new Date(),
+        promoCode: createOrderDto.promoCode,
+        vendorId: this.tenantService.getVendorId() || undefined,
         statusHistory: [{ status: createOrderDto.status || OrderStatus.PENDING, timestamp: new Date() }],
       }) as Order;
 
       const savedOrder = await queryRunner.manager.save(order);
 
-      // 4. Create items and handle stock
       for (const item of items) {
-        // Calculate Marketplace Commission
         const commission = await this.commissionService.calculateCommission(
           item.product.vendorId,
           item.product.categoryId,
@@ -577,7 +355,6 @@ export class OrdersService {
         });
         await queryRunner.manager.save(orderItem);
 
-        // Update stock movement
         await this.stockService.createMovement({
           productId: item.productId,
           type: StockMovementType.OUT,
@@ -588,7 +365,6 @@ export class OrdersService {
         });
       }
 
-      // 5. Audit log
       await this.auditService.log({
         userId,
         userName,
@@ -599,26 +375,22 @@ export class OrdersService {
         newData: savedOrder,
       });
 
-      // Notification admin: Commande e-commerce
       await this.notificationsService.create({
         type: NotificationType.ORDER,
-        userId: undefined,
-        customerId: undefined,
         title: 'Nouvelle commande e-commerce',
         message: `Une commande #${savedOrder.orderNumber} vient d'être reçue de la part de ${savedOrder.customerName}`,
         link: `/admin/orders`
       });
 
       this.chatGateway.emitNewOrder(savedOrder);
-
       await this.processLoyalty(savedOrder);
-
       await queryRunner.commitTransaction();
       return this.findOne(savedOrder.id);
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
     } finally {
+      await queryRunner.release();
     }
   }
 
@@ -626,14 +398,7 @@ export class OrdersService {
     items: { productId: string; quantity: number; variantId?: string }[],
   ) {
     let subtotal = 0;
-    const calculatedItems: Array<{
-      productId: string;
-      quantity: number;
-      variantId?: string;
-      product: any;
-      variant: ProductVariant | null;
-      unitPrice: number;
-    }> = [];
+    const calculatedItems: any[] = [];
 
     for (const item of (items as any[])) {
       let product: any = null;
@@ -641,48 +406,34 @@ export class OrdersService {
       let unitPrice = 0;
 
       if (item.isBundle) {
-        product = await this.bundlesRepository.findOne({
-          where: { id: item.productId },
-        });
+        product = await this.bundlesRepo.findOne({ where: { id: item.productId } });
         if (!product) throw new NotFoundException(`Pack ${item.productId} non trouvé`);
         unitPrice = Number(product.bundlePrice);
       } else {
-        product = await this.productsRepository.findOne({
-          where: { id: item.productId },
-        });
+        product = await this.productsRepo.findOne({ where: { id: item.productId } });
         if (!product) throw new NotFoundException(`Produit ${item.productId} non trouvé`);
         unitPrice = Number(product.price);
 
         if (item.variantId) {
-          variant = await this.variantsRepository.findOne({
-            where: { id: item.variantId, productId: item.productId },
-          });
+          variant = await this.variantsRepo.findOne({ where: { id: item.variantId, productId: item.productId } });
           if (!variant) throw new NotFoundException(`Variante ${item.variantId} non trouvée`);
           unitPrice = Number(product.price) + Number(variant.priceModifier || 0);
         }
       }
 
       if (product.stock < item.quantity) {
-        throw new BadRequestException(
-          `Stock insuffisant pour ${product.name}. Disponible: ${product.stock}`,
-        );
+        throw new BadRequestException(`Stock insuffisant pour ${product.name}. Disponible: ${product.stock}`);
       }
 
       subtotal += unitPrice * item.quantity;
-
-      calculatedItems.push({
-        ...item,
-        product,
-        variant,
-        unitPrice,
-      });
+      calculatedItems.push({ ...item, product, variant, unitPrice });
     }
 
     return { items: calculatedItems, subtotal };
   }
 
   async finalizeVendorCommissions(orderId: string) {
-    const order = await this.ordersRepository.findOne({
+    const order = await this.repo.findOne({
       where: { id: orderId },
       relations: ['items', 'items.product']
     });
@@ -691,19 +442,17 @@ export class OrdersService {
 
     for (const item of order.items) {
       if (item.productId && item.commissionAmount > 0) {
-        const product = await this.productsRepository.findOne({ where: { id: item.productId } });
+        const product = await this.productsRepo.findOne({ where: { id: item.productId } });
         if (product && product.vendorId) {
-          const vendor = await this.dataSource.manager.findOne(Vendor, { where: { id: product.vendorId } });
+          const vendorRepo = this.dataSource.getRepository(Vendor);
+          const vendor = await vendorRepo.findOne({ where: { id: product.vendorId } });
           if (vendor) {
-            // Net for vendor = total price - commission
             const netAmount = Number(item.totalPrice) - Number(item.commissionAmount);
-            
             vendor.balance = Number(vendor.balance) + netAmount;
             vendor.totalRevenue = Number(vendor.totalRevenue) + netAmount;
             vendor.totalCommission = Number(vendor.totalCommission) + Number(item.commissionAmount);
             vendor.totalOrders += 1;
-            
-            await this.dataSource.manager.save(vendor);
+            await vendorRepo.save(vendor);
           }
         }
       }
@@ -713,22 +462,13 @@ export class OrdersService {
   private async processLoyalty(order: Order) {
     if (order.customerId && order.paymentStatus === PaymentStatus.PAID) {
       try {
-        // Éviter le double comptage
         const alreadyEarned = await this.loyaltyService.hasEarnedPoints(order.id);
         if (alreadyEarned) return;
 
-        // Mettre à jour les statistiques globales du client
         await this.customersService.updateCustomerStats(order.customerId, order.total);
-        
-        // Gain de points selon le multiplicateur du rang
         const points = await this.loyaltyService.calculateEarnedPoints(order.customerId, order.total);
-        
         if (points > 0) {
-          await this.loyaltyService.earnPoints({
-            customerId: order.customerId,
-            points,
-            orderId: order.id,
-          });
+          await this.loyaltyService.earnPoints({ customerId: order.customerId, points, orderId: order.id });
         }
       } catch (error) {
         console.error(`Loyalty error [Order ${order.id}]:`, error);
@@ -749,7 +489,7 @@ export class OrdersService {
     dateFrom?: Date,
     dateTo?: Date,
   ): Promise<PaginatedResponse<Order>> {
-    const qb = this.ordersRepository.createQueryBuilder('o')
+    const qb = this.repo.createQueryBuilder('o')
       .leftJoinAndSelect('o.items', 'items')
       .leftJoinAndSelect('o.customer', 'customer')
       .leftJoinAndSelect('o.user', 'user')
@@ -760,41 +500,32 @@ export class OrdersService {
     if (paymentMethod && paymentMethod !== 'all' as any) qb.andWhere('o.paymentMethod = :paymentMethod', { paymentMethod });
     
     if (source && source !== 'all') {
-      if (source === 'pos') {
-        qb.andWhere('o.sessionId IS NOT NULL');
-      } else if (source === 'ecommerce') {
-        qb.andWhere('o.sessionId IS NULL');
-      }
+      if (source === 'pos') qb.andWhere('o.sessionId IS NOT NULL');
+      else if (source === 'ecommerce') qb.andWhere('o.sessionId IS NULL');
     }
 
     if (customerId) qb.andWhere('o.customerId = :customerId', { customerId });
     if (userId) qb.andWhere('o.userId = :userId', { userId });
-    if (search) {
-      qb.andWhere('(o.orderNumber LIKE :search OR o.customerName LIKE :search)', { search: `%${search}%` });
-    }
+    if (search) qb.andWhere('(o.orderNumber LIKE :search OR o.customerName LIKE :search)', { search: `%${search}%` });
     if (dateFrom) qb.andWhere('o.createdAt >= :dateFrom', { dateFrom });
     if (dateTo) qb.andWhere('o.createdAt <= :dateTo', { dateTo });
 
-    qb.orderBy('o.createdAt', 'DESC')
-      .skip((page - 1) * pageSize)
-      .take(pageSize);
-
+    qb.orderBy('o.createdAt', 'DESC').skip((page - 1) * pageSize).take(pageSize);
     const [data, total] = await qb.getManyAndCount();
-
     return PaginatedResponseBuilder.build(data, total, page, pageSize);
   }
 
-  async getStats(
-    status?: OrderStatus,
-    paymentStatus?: PaymentStatus,
-    paymentMethod?: string,
-    customerId?: string,
     userId?: string,
     search?: string,
     dateFrom?: Date,
     dateTo?: Date,
   ) {
+    const vendorId = this.tenantService.getVendorId();
     const qb = this.ordersRepository.createQueryBuilder('o');
+
+    if (vendorId) {
+      qb.andWhere('o.vendorId = :vendorId', { vendorId });
+    }
 
     if (status && (status as any) !== 'all') qb.andWhere('o.status = :status', { status });
     if (paymentStatus && (paymentStatus as any) !== 'all') qb.andWhere('o.paymentStatus = :paymentStatus', { paymentStatus });
@@ -832,8 +563,9 @@ export class OrdersService {
   }
 
   async findOne(id: string): Promise<Order> {
+    const vendorId = this.tenantService.getVendorId();
     const order = await this.ordersRepository.findOne({
-      where: { id },
+      where: { id, vendorId: vendorId || undefined },
       relations: ['items', 'customer', 'user', 'session', 'items.product'],
     });
 
@@ -845,7 +577,9 @@ export class OrdersService {
   }
 
   async findRecent(limit: number = 10): Promise<Order[]> {
+    const vendorId = this.tenantService.getVendorId();
     return this.ordersRepository.find({
+      where: { vendorId: vendorId || undefined },
       relations: ['items', 'customer', 'user'],
       order: { createdAt: 'DESC' },
       take: limit,
@@ -965,28 +699,89 @@ export class OrdersService {
     return order;
   }
 
-  private async generateOrderNumber(prefix: string = 'CMD'): Promise<string> {
+  async findOne(id: string): Promise<Order> {
+    return super.findOne(id, ['items', 'items.product', 'customer', 'user', 'session']);
+  }
+
+  async updateStatus(id: string, status: OrderStatus, userId?: string): Promise<Order> {
+    const order = await this.findOne(id);
+    const oldStatus = order.status;
+    order.status = status;
+    
+    if (!order.statusHistory) order.statusHistory = [];
+    order.statusHistory.push({ status, timestamp: new Date(), userId });
+
+    const savedOrder = await this.repo.save(order);
+
+    if (status === OrderStatus.COMPLETED && oldStatus !== OrderStatus.COMPLETED) {
+      await this.finalizeVendorCommissions(order.id);
+    }
+
+    return savedOrder;
+  }
+
+  async updatePaymentStatus(id: string, paymentStatus: PaymentStatus): Promise<Order> {
+    const order = await this.findOne(id);
+    const oldStatus = order.paymentStatus;
+    order.paymentStatus = paymentStatus;
+    const savedOrder = await this.repo.save(order);
+
+    if (paymentStatus === PaymentStatus.PAID && oldStatus !== PaymentStatus.PAID) {
+      await this.processLoyalty(savedOrder);
+    }
+
+    return savedOrder;
+  }
+
+  private async generateOrderNumber(prefix: string): Promise<string> {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
-
-    const count = await this.ordersRepository.count({
+    
+    const count = await this.repo.count({
       where: {
         createdAt: Between(
-          new Date(date.setHours(0, 0, 0, 0)),
-          new Date(date.setHours(23, 59, 59, 999)),
-        ),
-      },
+          new Date(date.getFullYear(), date.getMonth(), date.getDate()),
+          new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59)
+        )
+      }
     });
 
-    const sequence = (count + 1).toString().padStart(4, '0');
-    return `${prefix}-${year}${month}${day}-${sequence}`;
+    return `${prefix}${year}${month}${day}-${(count + 1).toString().padStart(4, '0')}`;
+  }
+
+  async getGlobalStats() {
+    const [total, pending, completed, cancelled] = await Promise.all([
+      this.repo.count(),
+      this.repo.count({ where: { status: OrderStatus.PENDING } }),
+      this.repo.count({ where: { status: OrderStatus.COMPLETED } }),
+      this.repo.count({ where: { status: OrderStatus.CANCELLED } }),
+    ]);
+
+    const revenueResult = await this.repo.createQueryBuilder('o')
+      .select('SUM(o.total)', 'total')
+      .where('o.status = :status', { status: OrderStatus.COMPLETED })
+      .getRawOne();
+
+    const ordersByMethod = await this.repo.createQueryBuilder('o')
+      .select('o.paymentMethod', 'method')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('o.paymentMethod')
+      .getRawMany();
+
+    return {
+      total,
+      pending,
+      completed,
+      cancelled,
+      totalRevenue: Number(revenueResult?.total || 0),
+      ordersByMethod,
+    };
   }
 
   async crossSearch(boughtProductId: string, notBoughtProductId: string): Promise<any[]> {
-    // 1. Find all customers who bought product A
-    const buyersOfA = await this.orderItemsRepository.createQueryBuilder('oi')
+    const buyersOfA = await this.orderItemsRepo.createQueryBuilder('oi')
       .innerJoin('oi.order', 'o')
       .innerJoinAndSelect('o.customer', 'c')
       .select(['DISTINCT c.id', 'c.firstName', 'c.lastName', 'c.email', 'c.phone', 'c.totalSpent', 'c.totalOrders', 'c.loyaltyPoints'])
@@ -998,8 +793,7 @@ export class OrdersService {
 
     const idsOfA = buyersOfA.map(b => b.c_id);
 
-    // 2. Find customers among those who also bought product B
-    const buyersOfBoth = await this.orderItemsRepository.createQueryBuilder('oi')
+    const buyersOfBoth = await this.orderItemsRepo.createQueryBuilder('oi')
       .innerJoin('oi.order', 'o')
       .select('DISTINCT o.customerId', 'customerId')
       .where('oi.productId = :pidB', { pidB: notBoughtProductId })
@@ -1008,7 +802,6 @@ export class OrdersService {
 
     const idsOfBoth = new Set(buyersOfBoth.map(b => b.customerId));
 
-    // 3. Return customers who are in A but NOT in both
     return buyersOfA
       .filter(b => !idsOfBoth.has(b.c_id))
       .map(b => ({
@@ -1024,11 +817,11 @@ export class OrdersService {
   }
 
   async recommendWarehouses(lat: number, lon: number, limit: number = 3): Promise<any[]> {
-    const warehouses = await this.warehouseRepository.find({
+    const warehouses = await this.warehouseRepo.find({
       where: { isActive: true },
     });
 
-    const recommendations = warehouses
+    return warehouses
       .map(w => {
         const distance = calculateDistance(
           lat,
@@ -1048,7 +841,5 @@ export class OrdersService {
       .filter(w => w.distance !== Infinity)
       .sort((a, b) => a.distance - b.distance)
       .slice(0, limit);
-
-    return recommendations;
   }
 }

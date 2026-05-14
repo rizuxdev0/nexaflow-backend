@@ -8,6 +8,9 @@ export class SubscriptionPlan {
   @Column()
   name: string;
 
+  @Column({ unique: true, nullable: true })
+  code: string; // Internal code like 'starter', 'pro', etc.
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
 
@@ -34,6 +37,28 @@ export class SubscriptionPlan {
 
   @Column({ default: 0 })
   order: number;
+
+  // Quotas & Limitations
+  @Column({ default: 50 })
+  maxProducts: number;
+
+  @Column({ default: 1 })
+  maxUsers: number;
+
+  @Column({ default: 100 })
+  maxOrdersPerMonth: number;
+
+  @Column({ default: 1 })
+  maxWarehouses: number;
+
+  @Column({ default: true })
+  hasPos: boolean;
+
+  @Column({ default: false })
+  hasChat: boolean;
+
+  @Column({ default: false })
+  hasAnalytics: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

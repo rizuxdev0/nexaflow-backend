@@ -98,6 +98,16 @@ export class CreateShopOrderDto {
   @IsOptional()
   discountTotal?: number;
 
+  @ApiPropertyOptional({ description: 'Latitude de livraison' })
+  @IsNumber()
+  @IsOptional()
+  shippingLatitude?: number;
+
+  @ApiPropertyOptional({ description: 'Longitude de livraison' })
+  @IsNumber()
+  @IsOptional()
+  shippingLongitude?: number;
+
   @ApiProperty({ type: [ShopOrderItemDto], description: 'Articles commandés' })
   @IsArray()
   @ValidateNested({ each: true })

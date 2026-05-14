@@ -9,25 +9,35 @@ import {
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
 import * as fs from 'fs';
 import type { Request } from 'express';
 import { Public } from '../../common/decorators/public.decorator';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 
+/**
+ * Helper to get vendorId from request for Multer storage
+ */
+const getVendorId = (req: any): string => {
+  const vendorId = req.user?.vendorId || req.headers['x-vendor-id'] || req.query?.vendorId || 'global';
+  // Sanitize vendorId to prevent path traversal
+  return String(vendorId).replace(/[^a-zA-Z0-9-]/g, '');
+};
+
 @ApiTags('upload')
 @Controller('upload')
 @ApiBearerAuth()
 export class UploadController {
-  @Public()
+  
   @Post('images')
-  @ApiOperation({ summary: 'Uploader des images' })
+  @ApiOperation({ summary: 'Uploader des images isolées par tenant' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const uploadPath = './uploads/images';
+          const vendorId = getVendorId(req);
+          const uploadPath = `./uploads/${vendorId}/images`;
           if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
           }
@@ -59,24 +69,25 @@ export class UploadController {
 
     const protocol = req.protocol;
     const host = req.get('host');
+    const vendorId = getVendorId(req);
     
     const urls = files.map(file => {
-      // Retourne l'URL complète : http://localhost:3003/uploads/images/filename.jpg
-      return `${protocol}://${host}/uploads/images/${file.filename}`;
+      // Retourne l'URL isolée : http://host/uploads/{vendorId}/images/filename.jpg
+      return `${protocol}://${host}/uploads/${vendorId}/images/${file.filename}`;
     });
 
     return { urls };
   }
 
-  @Public()
   @Post('files')
-  @ApiOperation({ summary: 'Uploader des fichiers (documents, etc.)' })
+  @ApiOperation({ summary: 'Uploader des fichiers (documents) isolés par tenant' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FilesInterceptor('files', 10, {
       storage: diskStorage({
         destination: (req, file, cb) => {
-          const uploadPath = './uploads/files';
+          const vendorId = getVendorId(req);
+          const uploadPath = `./uploads/${vendorId}/files`;
           if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
           }
@@ -99,10 +110,11 @@ export class UploadController {
 
     const protocol = req.protocol;
     const host = req.get('host');
+    const vendorId = getVendorId(req);
     
     const urls = files.map(file => {
       return {
-        url: `${protocol}://${host}/uploads/files/${file.filename}`,
+        url: `${protocol}://${host}/uploads/${vendorId}/files/${file.filename}`,
         name: file.originalname,
         type: file.mimetype
       };

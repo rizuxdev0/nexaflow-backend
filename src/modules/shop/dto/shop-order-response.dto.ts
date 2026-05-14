@@ -46,6 +46,12 @@ export class ShopOrderResponseDto {
   total: number;
 
   @ApiProperty()
+  discountTotal: number;
+
+  @ApiPropertyOptional()
+  promoCode?: string;
+
+  @ApiProperty()
   paymentMethod: string;
 
   @ApiProperty()

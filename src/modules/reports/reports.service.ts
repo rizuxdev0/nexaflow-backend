@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThan } from 'typeorm';
-import { Order, OrderStatus } from '../orders/entities/order.entity';
+import { Repository, Between, SelectQueryBuilder } from 'typeorm';
+import { Order, PaymentStatus } from '../orders/entities/order.entity';
 import { Product } from '../products/entities/product.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { StockMovement } from '../stock/entities/stock-movement.entity';
+import { Expense, ExpenseStatus } from '../expenses/entities/expense.entity';
 
 @Injectable()
 export class ReportsService {
@@ -17,24 +18,54 @@ export class ReportsService {
     private readonly customerRepository: Repository<Customer>,
     @InjectRepository(StockMovement)
     private readonly movementRepository: Repository<StockMovement>,
+    @InjectRepository(Expense)
+    private readonly expenseRepository: Repository<Expense>,
   ) {}
 
-  async getSalesOverview(startDate?: Date, endDate?: Date) {
-    const start = startDate || new Date(new Date().setMonth(new Date().getMonth() - 1));
-    const end = endDate || new Date();
+  async getSalesOverview(startDate?: Date | string, endDate?: Date | string, branchId?: string, sellerId?: string) {
+    const start = startDate ? new Date(startDate) : new Date(new Date().setMonth(new Date().getMonth() - 1));
+    const end = endDate ? new Date(endDate) : new Date();
 
-    const orders = await this.orderRepository.find({
-      where: {
-        createdAt: Between(start, end),
-        status: OrderStatus.COMPLETED
-      }
-    });
+    const orderQuery = this.orderRepository.createQueryBuilder('o')
+      .leftJoinAndSelect('o.items', 'item')
+      .leftJoinAndSelect('item.product', 'product')
+      .where('o.createdAt BETWEEN :start AND :end', { start, end })
+      .andWhere('o.paymentStatus = :status', { status: PaymentStatus.PAID });
+
+    if (branchId) {
+      orderQuery.andWhere('o.branchId = :branchId', { branchId });
+    }
+    if (sellerId) {
+      orderQuery.andWhere('o.userId = :sellerId', { sellerId });
+    }
+
+    const orders = await orderQuery.getMany();
 
     const totalRevenue = orders.reduce((acc, o) => acc + Number(o.total), 0);
     const orderCount = orders.length;
     const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
 
-    // Group by day?
+    let totalCogs = 0;
+    orders.forEach(o => {
+      o.items.forEach(item => {
+        const costPrice = item.product?.costPrice ? Number(item.product.costPrice) : 0;
+        totalCogs += costPrice * Number(item.quantity);
+      });
+    });
+
+    const expenseQuery = this.expenseRepository.createQueryBuilder('e')
+      .where('e.date BETWEEN :start AND :end', { start, end })
+      .andWhere('e.status = :status', { status: ExpenseStatus.PAID });
+
+    if (branchId) {
+      expenseQuery.andWhere('e.branchId = :branchId', { branchId });
+    }
+    
+    const expenses = await expenseQuery.getMany();
+    const totalExpenses = expenses.reduce((acc, e) => acc + Number(e.amount), 0);
+
+    const netMargin = totalRevenue - totalCogs - totalExpenses;
+
     const dailyMap = new Map<string, number>();
     orders.forEach(o => {
       const date = o.createdAt.toISOString().split('T')[0];
@@ -45,6 +76,9 @@ export class ReportsService {
       totalRevenue,
       orderCount,
       avgOrderValue,
+      totalCogs,
+      totalExpenses,
+      netMargin,
       dailySales: Array.from(dailyMap.entries()).map(([date, total]) => ({ date, total }))
     };
   }
@@ -55,14 +89,14 @@ export class ReportsService {
       .createQueryBuilder('o')
       .innerJoin('o.items', 'item')
       .select('item.productName', 'name')
-      .addSelect('item.sku', 'sku')
+      .addSelect('item.productSku', 'sku')
       .addSelect('SUM(item.quantity)', 'totalQuantity')
-      .addSelect('SUM(item.total)', 'totalRevenue')
-      .where('o.status = :status', { status: OrderStatus.COMPLETED })
+      .addSelect('SUM(item.totalPrice)', 'totalRevenue')
+      .where('o.paymentStatus = :status', { status: PaymentStatus.PAID })
       .groupBy('item.productId')
       .addGroupBy('item.productName')
-      .addGroupBy('item.sku')
-      .orderBy('totalRevenue', 'DESC')
+      .addGroupBy('item.productSku')
+      .orderBy('SUM(item.totalPrice)', 'DESC')
       .limit(limit)
       .getRawMany();
 
@@ -81,7 +115,7 @@ export class ReportsService {
     const revenueSum = await this.orderRepository
       .createQueryBuilder('o')
       .select('SUM(o.total)', 'total')
-      .where('o.status = :status', { status: OrderStatus.COMPLETED })
+      .where('o.paymentStatus = :status', { status: PaymentStatus.PAID })
       .getRawOne();
 
     const customerLTV = totalCustomers > 0 ? Number(revenueSum.total) / totalCustomers : 0;

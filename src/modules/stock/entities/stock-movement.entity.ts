@@ -10,6 +10,7 @@ import {
 import { Product } from '../../products/entities/product.entity';
 import { User } from '../../users/entities/user.entity';
 import { Warehouse } from '../../warehouses/entities/warehouse.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 export enum StockMovementType {
   IN = 'in',
@@ -67,6 +68,13 @@ export class StockMovement {
 
   @Column({ type: 'int', nullable: true })
   newStock: number;
+
+  @ManyToOne(() => Vendor)
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @CreateDateColumn()
   createdAt: Date;

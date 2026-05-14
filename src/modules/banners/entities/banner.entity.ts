@@ -44,6 +44,9 @@ export class Banner {
   @Column({ type: 'int', default: 0 })
   priority: number;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

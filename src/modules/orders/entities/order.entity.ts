@@ -13,6 +13,7 @@ import { CashSession } from 'src/modules/cash-sessions/entities/cash-session.ent
 import { Customer } from 'src/modules/customers/entities/customer.entity';
 import { User } from 'src/modules/users/entities/user.entity';
 import { Driver } from 'src/modules/deliveries/entities/driver.entity';
+import { Vendor } from 'src/modules/vendors/entities/vendor.entity';
 export enum OrderStatus {
   DRAFT = 'draft',
   PENDING = 'pending',
@@ -105,6 +106,13 @@ export class Order {
   @Column({ type: 'decimal', precision: 10, scale: 0 })
   total: number;
 
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
+
   @Column({
     type: 'enum',
     enum: OrderStatus,
@@ -163,4 +171,7 @@ export class Order {
 
   @Column({ type: 'timestamp', nullable: true })
   deliveredAt: Date;
+
+  @Column({ nullable: true })
+  promoCode: string;
 }

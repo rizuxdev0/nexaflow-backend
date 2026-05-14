@@ -3,17 +3,20 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { ProductBundle } from './entities/package.entity';
 import { CreatePackageDto } from './dto/package.dto';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class PackagesService {
   constructor(
     @InjectRepository(ProductBundle)
     private readonly bundleRepository: Repository<ProductBundle>,
+    private readonly tenantService: TenantService,
   ) {}
 
   async findAll(query: { active?: boolean; page?: number; pageSize?: number }) {
     const { active, page = 1, pageSize = 20 } = query;
-    const where: any = {};
+    const vendorId = this.tenantService.getVendorId();
+    const where: any = { vendorId: vendorId || undefined };
     if (active !== undefined) where.isActive = active;
 
     const [data, total] = await this.bundleRepository.findAndCount({
@@ -27,13 +30,15 @@ export class PackagesService {
   }
 
   async findOne(id: string) {
-    const bundle = await this.bundleRepository.findOne({ where: { id } });
+    const vendorId = this.tenantService.getVendorId();
+    const bundle = await this.bundleRepository.findOne({ where: { id, vendorId: vendorId || undefined } });
     if (!bundle) throw new NotFoundException('Pack non trouvé');
     return bundle;
   }
 
   async findBySlug(slug: string) {
-    const bundle = await this.bundleRepository.findOne({ where: { slug, isActive: true } });
+    const vendorId = this.tenantService.getVendorId();
+    const bundle = await this.bundleRepository.findOne({ where: { slug, isActive: true, vendorId: vendorId || undefined } });
     if (!bundle) throw new NotFoundException('Pack non trouvé');
     return bundle;
   }
@@ -44,7 +49,8 @@ export class PackagesService {
   }
 
   async create(dto: CreatePackageDto) {
-    const existing = await this.bundleRepository.findOne({ where: { slug: dto.slug } });
+    const vendorId = this.tenantService.getVendorId();
+    const existing = await this.bundleRepository.findOne({ where: { slug: dto.slug, vendorId: vendorId || undefined } });
     if (existing) throw new BadRequestException('Ce slug est déjà utilisé');
 
     const bundle = this.bundleRepository.create({
@@ -52,6 +58,7 @@ export class PackagesService {
       items: this.sanitizeItems(dto.items),
       originalPrice: Number(dto.originalPrice) || 0,
       bundlePrice: Number(dto.bundlePrice) || 0,
+      vendorId: vendorId || undefined,
     });
     return this.bundleRepository.save(bundle);
   }

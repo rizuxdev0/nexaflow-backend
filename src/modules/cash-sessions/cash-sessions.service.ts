@@ -17,6 +17,7 @@ import {
   PaginatedResponse,
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class CashSessionsService {
@@ -25,6 +26,7 @@ export class CashSessionsService {
     private sessionsRepository: Repository<CashSession>,
     @Inject(forwardRef(() => RegistersService))
     private registersService: RegistersService,
+    private tenantService: TenantService,
   ) {}
 
   async openSession(
@@ -41,10 +43,12 @@ export class CashSessionsService {
     }
 
     // Vérifier s'il n'y a pas déjà une session ouverte sur cette caisse
+    const vendorId = this.tenantService.getVendorId();
     const activeSession = await this.sessionsRepository.findOne({
       where: {
         registerId: openSessionDto.registerId,
         status: SessionStatus.OPEN,
+        vendorId: vendorId || undefined,
       },
     });
 
@@ -63,6 +67,7 @@ export class CashSessionsService {
       status: SessionStatus.OPEN,
       notes: openSessionDto.notes,
       payments: [],
+      vendorId: vendorId || undefined,
     });
 
     return await this.sessionsRepository.save(session);
@@ -121,8 +126,9 @@ export class CashSessionsService {
   }
 
   async findOne(id: string): Promise<CashSession> {
+    const vendorId = this.tenantService.getVendorId();
     const session = await this.sessionsRepository.findOne({
-      where: { id },
+      where: { id, vendorId: vendorId || undefined },
       relations: ['register', 'orders', 'user'],
     });
 
@@ -134,10 +140,12 @@ export class CashSessionsService {
   }
 
   async findActiveByRegister(registerId: string): Promise<CashSession | null> {
+    const vendorId = this.tenantService.getVendorId();
     const session = await this.sessionsRepository.findOne({
       where: {
         registerId,
         status: SessionStatus.OPEN,
+        vendorId: vendorId || undefined,
       },
       relations: ['register', 'user'],
     });
@@ -154,7 +162,8 @@ export class CashSessionsService {
     endDate?: Date,
     userId?: string,
   ): Promise<PaginatedResponse<CashSession>> {
-    const where: FindOptionsWhere<CashSession> = {};
+    const vendorId = this.tenantService.getVendorId();
+    const where: FindOptionsWhere<CashSession> = { vendorId: vendorId || undefined };
 
     if (registerId) {
       where.registerId = registerId;
@@ -188,8 +197,10 @@ export class CashSessionsService {
     startDate?: Date,
     endDate?: Date,
   ): Promise<CashSession[]> {
+    const vendorId = this.tenantService.getVendorId();
     const where: FindOptionsWhere<CashSession> = {
       registerId,
+      vendorId: vendorId || undefined,
     };
 
     if (startDate && endDate) {
@@ -373,9 +384,12 @@ export class CashSessionsService {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
+    const vendorId = this.tenantService.getVendorId();
+
     const sessions = await this.sessionsRepository.find({
       where: {
         openedAt: Between(startOfDay, endOfDay),
+        vendorId: vendorId || undefined,
       },
       relations: ['register', 'user'],
     });

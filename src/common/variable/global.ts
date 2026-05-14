@@ -26,4 +26,5 @@ export const resources = [
   'deliveries',
   'stock_movements',
   'expenses',
+  'subscriptions',
 ];

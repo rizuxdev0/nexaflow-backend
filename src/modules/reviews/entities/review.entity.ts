@@ -39,6 +39,9 @@ export class Review {
     repliedBy: string;
   };
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @Column({ default: 'pending' })
   status: string; // 'pending' | 'approved' | 'rejected'
 

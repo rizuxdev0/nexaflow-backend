@@ -126,8 +126,7 @@ async function bootstrap() {
 
   // 3. CORS configuration
   app.enableCors({
-    // origin: ['http://localhost:5173', 'http://localhost:3000'],
-    origin: '*',
+    origin: true, // Autorise dynamiquement l'origine de la requête (nécessaire avec credentials: true)
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

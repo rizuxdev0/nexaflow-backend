@@ -135,6 +135,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, Like, FindOptionsWhere, EntityManager } from 'typeorm';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
 import { Order } from '../orders/entities/order.entity';
+import { CreditNote } from './entities/credit-note.entity';
+import { InvoiceNumberingConfig } from './entities/invoice-numbering-config.entity';
 import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
@@ -142,21 +144,40 @@ import {
   PaginatedResponse,
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class InvoicesService {
+export class InvoicesService extends AbstractTenantService<Invoice> {
   constructor(
     @InjectRepository(Invoice)
     private invoicesRepository: Repository<Invoice>,
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
-  ) {}
+    @InjectRepository(CreditNote)
+    private creditNotesRepository: Repository<CreditNote>,
+    @InjectRepository(InvoiceNumberingConfig)
+    private configRepository: Repository<InvoiceNumberingConfig>,
+    tenantService: TenantService,
+  ) {
+    super(invoicesRepository, tenantService, 'Invoice');
+  }
+
+  // Proxied secondary repositories
+  private get ordersRepo() { return this.tenantRepo(this.ordersRepository); }
+  private get creditNotesRepo() { return this.tenantRepo(this.creditNotesRepository); }
+  private get configRepo() { return this.tenantRepo(this.configRepository); }
+
+  private getRepo<T>(baseRepo: Repository<T>, manager?: EntityManager): Repository<T> {
+    const repo = manager ? manager.getRepository(baseRepo.target) : baseRepo;
+    return this.tenantRepo(repo as Repository<T>);
+  }
 
   // ============ GÉNÉRATION DE FACTURE ============
 
   async generateFromOrder(orderId: string, manager?: EntityManager): Promise<Invoice> {
-    const repoOrder = manager ? manager.getRepository(Order) : this.ordersRepository;
-    const repoInvoice = manager ? manager.getRepository(Invoice) : this.invoicesRepository;
+    const repoOrder = this.getRepo(this.ordersRepository, manager);
+    const repoInvoice = this.getRepo(this.invoicesRepository, manager);
 
     const order = await repoOrder.findOne({
       where: { id: orderId },
@@ -185,8 +206,9 @@ export class InvoicesService {
       productName: item.productName,
       productSku: item.productSku,
       quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
+      unitPrice: Number(item.unitPrice),
+      totalPrice: Number(item.totalPrice),
+      total: Number(item.totalPrice), // Map both for frontend compatibility
       taxRate: item.taxRate,
       taxAmount: item.taxAmount,
     }));
@@ -214,29 +236,49 @@ export class InvoicesService {
       issuedAt,
       dueDate,
       paymentMethod: order.paymentMethod,
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
 
     return await repoInvoice.save(invoice);
   }
 
   private async generateInvoiceNumber(manager?: EntityManager): Promise<string> {
-    const repoInvoice = manager ? manager.getRepository(Invoice) : this.invoicesRepository;
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const repoConfig = this.getRepo(this.configRepository, manager);
+    
+    let config = await repoConfig.findOne({ where: {} });
+    if (!config) {
+      config = repoConfig.create({
+        vendorId: this.tenantService.getVendorId() || undefined,
+      });
+      await repoConfig.save(config);
+    }
 
-    // Compter les factures du mois
-    const startOfMonth = new Date(year, date.getMonth(), 1);
-    const endOfMonth = new Date(year, date.getMonth() + 1, 0, 23, 59, 59);
+    const now = new Date();
+    let num = config.prefix;
+    if (config.includeYear) num += config.separator + now.getFullYear();
+    if (config.includeMonth) num += String(now.getMonth() + 1).padStart(2, '0');
+    num += config.separator + String(config.nextSequence).padStart(config.padLength, '0');
 
-    const count = await repoInvoice.count({
-      where: {
-        createdAt: Between(startOfMonth, endOfMonth),
-      },
-    });
+    // Increment sequence
+    config.nextSequence++;
+    await repoConfig.save(config);
 
-    const sequence = (count + 1).toString().padStart(4, '0');
-    return `FAC-${year}${month}-${sequence}`;
+    return num;
+  }
+
+  async getNumberingConfig(): Promise<InvoiceNumberingConfig> {
+    let config = await this.configRepository.findOne({ where: {} });
+    if (!config) {
+      config = this.configRepository.create();
+      await this.configRepository.save(config);
+    }
+    return config;
+  }
+
+  async updateNumberingConfig(data: Partial<InvoiceNumberingConfig>): Promise<InvoiceNumberingConfig> {
+    let config = await this.getNumberingConfig();
+    Object.assign(config, data);
+    return await this.configRepository.save(config);
   }
 
   // ============ LISTE PAGINÉE ============
@@ -311,7 +353,7 @@ export class InvoicesService {
   // ============ DÉTAIL FACTURE ============
 
   async findOne(id: string): Promise<InvoiceResponseDto> {
-    const invoice = await this.invoicesRepository.findOne({
+    const invoice = await this.repo.findOne({
       where: { id },
       relations: ['order'],
     });
@@ -341,7 +383,7 @@ export class InvoicesService {
   }
 
   async findByOrderNumber(orderNumber: string): Promise<InvoiceResponseDto> {
-    const invoice = await this.invoicesRepository.findOne({
+    const invoice = await this.repo.findOne({
       where: { orderNumber },
       relations: ['order'],
     });
@@ -361,7 +403,7 @@ export class InvoicesService {
     id: string,
     updateStatusDto: UpdateInvoiceStatusDto,
   ): Promise<InvoiceResponseDto> {
-    const invoice = await this.invoicesRepository.findOne({
+    const invoice = await this.repo.findOne({
       where: { id },
     });
 
@@ -387,7 +429,7 @@ export class InvoicesService {
         : `${new Date().toISOString()}: ${updateStatusDto.notes}`;
     }
 
-    const updatedInvoice = await this.invoicesRepository.save(invoice);
+    const updatedInvoice = await this.repo.save(invoice);
     return this.mapToResponseDto(updatedInvoice);
   }
 
@@ -423,7 +465,7 @@ export class InvoicesService {
       where.issuedAt = Between(period.start, period.end);
     }
 
-    const invoices = await this.invoicesRepository.find({ where });
+    const invoices = await this.repo.find({ where });
 
     const totalInvoices = invoices.length;
     const totalAmount = invoices.reduce(
@@ -470,7 +512,7 @@ export class InvoicesService {
   async checkOverdueInvoices(): Promise<number> {
     const today = new Date();
 
-    const overdueInvoices = await this.invoicesRepository
+    const overdueInvoices = await this.repo
       .createQueryBuilder('invoice')
       .where('invoice.status = :status', { status: InvoiceStatus.ISSUED })
       .andWhere('invoice.dueDate < :today', { today })
@@ -478,7 +520,7 @@ export class InvoicesService {
 
     if (overdueInvoices.length > 0) {
       // Mettre à jour le statut des factures en retard
-      await this.invoicesRepository.update(
+      await this.repo.update(
         overdueInvoices.map((inv) => inv.id),
         { status: InvoiceStatus.OVERDUE },
       );
@@ -490,7 +532,7 @@ export class InvoicesService {
   async sendInvoiceReminders(): Promise<any> {
     // Logique pour envoyer des rappels de paiement
     // À implémenter avec un service d'email
-    const overdueInvoices = await this.invoicesRepository.find({
+    const overdueInvoices = await this.repo.find({
       where: { status: InvoiceStatus.OVERDUE },
       relations: ['order'],
     });
@@ -499,6 +541,67 @@ export class InvoicesService {
       count: overdueInvoices.length,
       message: `${overdueInvoices.length} rappels de paiement à envoyer`,
     };
+  }
+
+  // ============ MAPPERS ============
+
+  // ============ MULTI-CURRENCY ============
+
+  async convertCurrency(id: string, currencyCode: string, rate: number): Promise<InvoiceResponseDto> {
+    const invoice = await this.repo.findOne({ where: { id } });
+    if (!invoice) throw new NotFoundException('Facture non trouvée');
+    
+    // We update the invoice with currency info (for record keeping)
+    // In a real app, this might be more complex
+    await this.repo.update(id, {
+       notes: (invoice.notes || '') + `\nConverti en ${currencyCode} (Taux: ${rate})`
+    });
+    
+    return this.findOne(id);
+  }
+
+  // ============ EMAIL ============
+
+  async sendByEmail(id: string): Promise<InvoiceResponseDto> {
+    const invoice = await this.findOne(id);
+    // Simuler l'envoi d'email
+    console.log(`Envoi de la facture ${invoice.invoiceNumber} à ${invoice.customerEmail}...`);
+    
+    // Mettre à jour le statut si c'est un brouillon
+    if (invoice.status === InvoiceStatus.DRAFT) {
+      await this.updateStatus(id, { status: InvoiceStatus.ISSUED });
+    }
+    
+    return this.findOne(id);
+  }
+
+  // ============ AVOIRS (CREDIT NOTES) ============
+
+  async getCreditNotes(invoiceId?: string): Promise<CreditNote[]> {
+    const where: any = {};
+    if (invoiceId) where.invoiceId = invoiceId;
+    return await this.creditNotesRepo.find({
+      where,
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async createCreditNote(data: any): Promise<CreditNote> {
+    // Generate Credit Note Number
+    let config = await this.getNumberingConfig();
+    const now = new Date();
+    const creditNoteNumber = `${config.creditNotePrefix}-${now.getFullYear()}${String(now.getMonth()+1).padStart(2, '0')}-${String(config.nextCreditNoteSequence).padStart(4, '0')}`;
+    
+    config.nextCreditNoteSequence++;
+    await this.configRepo.save(config);
+
+    const creditNote = this.creditNotesRepo.create({
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    Object.assign(creditNote, data);
+    creditNote.creditNoteNumber = creditNoteNumber;
+
+    return await this.creditNotesRepo.save(creditNote);
   }
 
   // ============ MAPPERS ============
@@ -513,7 +616,10 @@ export class InvoicesService {
       customerName: invoice.customerName,
       customerEmail: invoice.customerEmail,
       customerAddress: invoice.customerAddress,
-      items: invoice.items,
+      items: invoice.items.map(item => ({
+        ...item,
+        total: Number(item.totalPrice || item.total) // Ensure 'total' exists for frontend
+      })),
       subtotal: Number(invoice.subtotal),
       taxTotal: Number(invoice.taxTotal),
       discountTotal: Number(invoice.discountTotal),

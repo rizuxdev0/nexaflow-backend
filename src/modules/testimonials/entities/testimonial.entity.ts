@@ -26,6 +26,9 @@ export class Testimonial {
   @Column({ default: 0 })
   displayOrder: number;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

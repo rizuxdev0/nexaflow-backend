@@ -7,6 +7,8 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Warehouse } from '../../warehouses/entities/warehouse.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
+import { ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('branches')
 export class Branch {
@@ -45,6 +47,13 @@ export class Branch {
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @OneToMany(() => Warehouse, (warehouse) => warehouse.branch)
   warehouses: Warehouse[];

@@ -44,4 +44,8 @@ export class ProductFilterDto extends PaginationDto {
   })
   @IsBoolean()
   declare isActive?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  vendorId?: string;
 }

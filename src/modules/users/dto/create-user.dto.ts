@@ -59,6 +59,11 @@ export class CreateUserDto {
   @IsOptional()
   city?: string;
 
+  @ApiPropertyOptional({ description: 'URL de la photo de profil', example: 'https://example.com/avatar.jpg' })
+  @IsString()
+  @IsOptional()
+  avatar?: string;
+
   @ApiProperty({ description: 'ID du rôle', example: 'uuid-du-role' })
   @IsUUID()
   @IsNotEmpty()

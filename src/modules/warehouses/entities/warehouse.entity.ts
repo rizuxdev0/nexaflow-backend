@@ -9,6 +9,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { Branch } from '../../branches/entities/branch.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 @Entity('warehouses')
 export class Warehouse {
@@ -57,6 +58,13 @@ export class Warehouse {
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
   latitude: number;

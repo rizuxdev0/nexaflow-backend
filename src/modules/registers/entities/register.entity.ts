@@ -10,6 +10,7 @@ import {
   JoinColumn,
   ManyToOne,
 } from 'typeorm';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 // Note: User sera importé du module auth quand il sera créé
 @Entity('registers')
@@ -41,6 +42,13 @@ export class Register {
 
   @OneToMany(() => CashSession, (session) => session.register)
   sessions: CashSession[];
+
+  @ManyToOne(() => Vendor)
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @CreateDateColumn()
   createdAt: Date;

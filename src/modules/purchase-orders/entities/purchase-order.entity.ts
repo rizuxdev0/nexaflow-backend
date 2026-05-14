@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Supplier } from '../../suppliers/entities/supplier.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 export enum PurchaseOrderStatus {
   DRAFT = 'draft',
@@ -93,6 +94,13 @@ export class PurchaseOrder {
 
   @Column({ nullable: true, type: 'text' })
   notes: string;
+
+  @ManyToOne(() => Vendor)
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @CreateDateColumn()
   createdAt: Date;

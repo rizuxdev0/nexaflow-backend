@@ -1,10 +1,18 @@
-import { Entity, PrimaryColumn, Column, UpdateDateColumn } from 'typeorm';
 import { SubscriptionPlan } from '../subscription-plans';
+import { Vendor } from '../../vendors/entities/vendor.entity';
+import { ManyToOne, JoinColumn, PrimaryGeneratedColumn, Column, Entity, UpdateDateColumn } from 'typeorm';
 
 @Entity('store_config')
 export class StoreConfig {
-  @PrimaryColumn({ length: 50 })
+  @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @OneToOne(() => Vendor, (vendor) => vendor.storeConfig, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ unique: true, nullable: true })
+  vendorId: string;
 
   @Column({ type: 'enum', enum: SubscriptionPlan, default: SubscriptionPlan.STARTER })
   subscriptionPlan: SubscriptionPlan;

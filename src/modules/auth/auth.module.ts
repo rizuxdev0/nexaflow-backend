@@ -13,6 +13,9 @@ import { CategoriesModule } from '../categories/categories.module';
 import { SuppliersModule } from '../suppliers/suppliers.module';
 import { StoreConfigModule } from '../store-config/store-config.module';
 import { CustomersModule } from '../customers/customers.module';
+import { VendorsModule } from '../vendors/vendors.module';
+import { BranchesModule } from '../branches/branches.module';
+import { WarehousesModule } from '../warehouses/warehouses.module';
 
 @Module({
   imports: [
@@ -24,6 +27,9 @@ import { CustomersModule } from '../customers/customers.module';
     SuppliersModule,
     StoreConfigModule,
     CustomersModule,
+    VendorsModule,
+    BranchesModule,
+    WarehousesModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

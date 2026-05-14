@@ -14,6 +14,7 @@ import { Role } from '../../roles/entities/role.entity';
 import { Permission } from '../../permissions/entities/permission.entity';
 import { CashSession } from '../../cash-sessions/entities/cash-session.entity';
 import { Order } from '../../orders/entities/order.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 @Entity('users')
 export class User {
@@ -71,6 +72,13 @@ export class User {
 
   @Column()
   roleId: string;
+
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
   
   @ManyToMany(() => Permission)
   @JoinTable({ name: 'user_extra_permissions' })

@@ -24,13 +24,14 @@ import { StockService } from '../stock/stock.service';
 import { StockMovementType } from '../stock/entities/stock-movement.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 import * as slugify from 'slugify';
 
-// Type pour les produits avec statut de stock
 type ProductWithStockStatus = Product & { stockStatus: string };
 
 @Injectable()
-export class ProductsService {
+export class ProductsService extends AbstractTenantService<Product> {
   constructor(
     @InjectRepository(Product)
     private productsRepository: Repository<Product>,
@@ -40,8 +41,11 @@ export class ProductsService {
     private suppliersService: SuppliersService,
     private stockService: StockService,
     private auditService: AuditService,
+    tenantService: TenantService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-  ) {}
+  ) {
+    super(productsRepository, tenantService, 'Product');
+  }
 
   private generateSlug(name: string): string {
     return slugify.default(name, {
@@ -59,69 +63,48 @@ export class ProductsService {
   }
 
   async create(createProductDto: CreateProductDto): Promise<Product> {
-    // Générer un SKU s'il n'est pas fourni ou s'il vaut 'undefined'
     if (!createProductDto.sku || createProductDto.sku === 'undefined') {
       const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
       createProductDto.sku = `PRD-${Date.now().toString().slice(-4)}${randomPart}`;
     }
 
-    // Vérifier si le SKU existe déjà
-    const existingSku = await this.productsRepository.findOne({
+    const existingSku = await this.repo.findOne({
       where: { sku: createProductDto.sku },
     });
 
     if (existingSku) {
-      throw new ConflictException(
-        `Un produit avec le SKU "${createProductDto.sku}" existe déjà`,
-      );
+      throw new ConflictException(`Un produit avec le SKU "${createProductDto.sku}" existe déjà`);
     }
 
-    // Vérifier si la catégorie existe
-    const category = await this.categoriesService.findOne(
-      createProductDto.categoryId,
-    );
+    const category = await this.categoriesService.findOne(createProductDto.categoryId);
     if (!category) {
-      throw new NotFoundException(
-        `Catégorie avec l'ID "${createProductDto.categoryId}" non trouvée`,
-      );
+      throw new NotFoundException(`Catégorie avec l'ID "${createProductDto.categoryId}" non trouvée`);
     }
 
-    // Vérifier si le fournisseur existe (si fourni)
     if (createProductDto.supplierId) {
-      const supplier = await this.suppliersService.findOne(
-        createProductDto.supplierId,
-      );
+      const supplier = await this.suppliersService.findOne(createProductDto.supplierId);
       if (!supplier) {
-        throw new NotFoundException(
-          `Fournisseur avec l'ID "${createProductDto.supplierId}" non trouvé`,
-        );
+        throw new NotFoundException(`Fournisseur avec l'ID "${createProductDto.supplierId}" non trouvé`);
       }
     }
 
-    // Générer le slug à partir du nom
     const slug = this.generateSlug(createProductDto.name);
-
-    // Vérifier l'unicité du slug
-    const existingSlug = await this.productsRepository.findOne({
-      where: { slug },
-    });
+    const existingSlug = await this.repo.findOne({ where: { slug } });
 
     if (existingSlug) {
-      throw new ConflictException(
-        `Un produit avec le slug "${slug}" existe déjà`,
-      );
+      throw new ConflictException(`Un produit avec le slug "${slug}" existe déjà`);
     }
 
-    const product = this.productsRepository.create({
+    const product = this.repo.create({
       ...createProductDto,
       slug,
+      vendorId: this.tenantService.getVendorId() || undefined,
       images: createProductDto.images || [],
       tags: createProductDto.tags || [],
     });
 
-    const savedProduct = await this.productsRepository.save(product);
+    const savedProduct = await this.repo.save(product);
 
-    // Initialiser le mouvement de stock si stock > 0
     if (savedProduct.stock > 0) {
       await this.stockService.createMovement({
         productId: savedProduct.id,
@@ -131,7 +114,6 @@ export class ProductsService {
       });
     }
 
-    // Logger l'audit
     await this.auditService.log({
       userName: 'Système',
       action: AuditAction.CREATE,
@@ -161,39 +143,17 @@ export class ProductsService {
   ): Promise<PaginatedResponse<ProductWithStockStatus>> {
     const where: FindOptionsWhere<Product> = {};
 
-    if (search) {
-      where.name = Like(`%${search}%`);
-    }
-
-    if (categoryId) {
-      where.categoryId = categoryId;
-    }
-
-    if (supplierId) {
-      where.supplierId = supplierId;
-    }
-
-    if (vendorId) {
-      where.vendorId = vendorId;
-    }
-
-    if (approvalStatus) {
-      where.approvalStatus = approvalStatus as any;
-    }
-
-    if (isActive !== undefined) {
-      where.isActive = isActive;
-    }
-
-    if (isFeatured !== undefined) {
-      where.isFeatured = isFeatured;
-    }
-
+    if (search) where.name = Like(`%${search}%`);
+    if (categoryId) where.categoryId = categoryId;
+    if (supplierId) where.supplierId = supplierId;
+    if (approvalStatus) where.approvalStatus = approvalStatus as any;
+    if (isActive !== undefined) where.isActive = isActive;
+    if (isFeatured !== undefined) where.isFeatured = isFeatured;
     if (minPrice !== undefined || maxPrice !== undefined) {
       where.price = Between(minPrice || 0, maxPrice || 999999999);
     }
 
-    const [data, total] = await this.productsRepository.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       relations: ['category', 'supplier', 'variants'],
       skip: (page - 1) * pageSize,
@@ -201,7 +161,6 @@ export class ProductsService {
       order: { createdAt: 'DESC' },
     });
 
-    // Filtrer par stock si demandé
     let filteredData = data;
     if (inStock !== undefined) {
       filteredData = data.filter((product) =>
@@ -209,13 +168,10 @@ export class ProductsService {
       );
     }
 
-    // Ajouter le statut de stock
-    const dataWithStatus: ProductWithStockStatus[] = filteredData.map(
-      (product) => ({
-        ...product,
-        stockStatus: this.getStockStatus(product),
-      }),
-    );
+    const dataWithStatus: ProductWithStockStatus[] = filteredData.map((product) => ({
+      ...product,
+      stockStatus: this.getStockStatus(product),
+    }));
 
     return PaginatedResponseBuilder.build(
       dataWithStatus,
@@ -226,114 +182,58 @@ export class ProductsService {
   }
 
   async findOne(id: string): Promise<Product> {
-    const product = await this.productsRepository.findOne({
-      where: { id },
-      relations: ['category', 'supplier', 'variants'],
-    });
-
-    if (!product) {
-      throw new NotFoundException(`Produit avec l'ID "${id}" non trouvé`);
-    }
-
-    return product;
+    return super.findOne(id, ['category', 'supplier', 'variants']);
   }
 
   async findBySlug(slug: string): Promise<Product> {
-    const product = await this.productsRepository.findOne({
+    const product = await this.repo.findOne({
       where: { slug },
       relations: ['category', 'supplier', 'variants'],
     });
-
-    if (!product) {
-      throw new NotFoundException(`Produit avec le slug "${slug}" non trouvé`);
-    }
-
+    if (!product) throw new NotFoundException(`Produit avec le slug "${slug}" non trouvé`);
     return product;
   }
 
   async findBySku(sku: string): Promise<Product> {
-    const product = await this.productsRepository.findOne({
+    const product = await this.repo.findOne({
       where: { sku },
       relations: ['category', 'supplier', 'variants'],
     });
-
-    if (!product) {
-      throw new NotFoundException(`Produit avec le SKU "${sku}" non trouvé`);
-    }
-
+    if (!product) throw new NotFoundException(`Produit avec le SKU "${sku}" non trouvé`);
     return product;
   }
 
-  async update(
-    id: string,
-    updateProductDto: UpdateProductDto,
-  ): Promise<Product> {
+  async update(id: string, updateProductDto: UpdateProductDto): Promise<Product> {
     const product = await this.findOne(id);
 
-    // Vérifier l'unicité du SKU si modifié
     if (updateProductDto.sku && updateProductDto.sku !== product.sku) {
-      const existingSku = await this.productsRepository.findOne({
-        where: { sku: updateProductDto.sku },
-      });
-
+      const existingSku = await this.repo.findOne({ where: { sku: updateProductDto.sku } });
       if (existingSku && existingSku.id !== id) {
-        throw new ConflictException(
-          `Un produit avec le SKU "${updateProductDto.sku}" existe déjà`,
-        );
+        throw new ConflictException(`Un produit avec le SKU "${updateProductDto.sku}" existe déjà`);
       }
     }
 
-    // Vérifier la catégorie si modifiée
-    if (
-      updateProductDto.categoryId &&
-      updateProductDto.categoryId !== product.categoryId
-    ) {
-      const category = await this.categoriesService.findOne(
-        updateProductDto.categoryId,
-      );
-      if (!category) {
-        throw new NotFoundException(
-          `Catégorie avec l'ID "${updateProductDto.categoryId}" non trouvée`,
-        );
-      }
+    if (updateProductDto.categoryId && updateProductDto.categoryId !== product.categoryId) {
+      await this.categoriesService.findOne(updateProductDto.categoryId);
     }
 
-    // Vérifier le fournisseur si modifié
-    if (
-      updateProductDto.supplierId &&
-      updateProductDto.supplierId !== product.supplierId
-    ) {
-      const supplier = await this.suppliersService.findOne(
-        updateProductDto.supplierId,
-      );
-      if (!supplier) {
-        throw new NotFoundException(
-          `Fournisseur avec l'ID "${updateProductDto.supplierId}" non trouvé`,
-        );
-      }
+    if (updateProductDto.supplierId && updateProductDto.supplierId !== product.supplierId) {
+      await this.suppliersService.findOne(updateProductDto.supplierId);
     }
 
-    // Mettre à jour le slug si le nom change
     if (updateProductDto.name && updateProductDto.name !== product.name) {
       const newSlug = this.generateSlug(updateProductDto.name);
-      const existingSlug = await this.productsRepository.findOne({
-        where: { slug: newSlug },
-      });
-
+      const existingSlug = await this.repo.findOne({ where: { slug: newSlug } });
       if (existingSlug && existingSlug.id !== id) {
-        throw new ConflictException(
-          `Un produit avec le slug "${newSlug}" existe déjà`,
-        );
+        throw new ConflictException(`Un produit avec le slug "${newSlug}" existe déjà`);
       }
-
       product.slug = newSlug;
     }
 
     const oldData = { ...product };
     Object.assign(product, updateProductDto);
-    const updatedProduct = await this.productsRepository.save(product);
+    const updatedProduct = await this.repo.save(product);
 
-    // Logger l'audit
     await this.auditService.log({
       userName: 'Système',
       action: AuditAction.UPDATE,
@@ -350,9 +250,7 @@ export class ProductsService {
 
   async remove(id: string): Promise<void> {
     const product = await this.findOne(id);
-
-    // Supprimer d'abord les variantes
-    if (product.variants && product.variants.length > 0) {
+    if (product.variants?.length > 0) {
       await this.variantsRepository.remove(product.variants);
     }
 
@@ -361,9 +259,7 @@ export class ProductsService {
     const productSku = product.sku;
 
     try {
-      await this.productsRepository.remove(product);
-      
-      // Logger l'audit
+      await this.repo.remove(product);
       await this.auditService.log({
         userName: 'Système',
         action: AuditAction.DELETE,
@@ -372,23 +268,17 @@ export class ProductsService {
         details: `Suppression du produit ${productName} (${productSku})`,
       });
     } catch (error) {
-      // Si violation de clé étrangère (ex: lié aux commandes ou mouvements de stock)
-      if (error.message && (error.message.includes('foreign key constraint') || error.message.includes('clé étrangère') || error.message.includes('violates foreign'))) {
-        if (!product.isActive) {
-           throw new BadRequestException("Impossible de supprimer définitivement ce produit car il est lié à l'historique des ventes ou des mouvements de stock. Il restera archivé.");
-        }
+      if (error.message?.includes('foreign key') || error.message?.includes('violates foreign')) {
         product.isActive = false;
         product.sku = `${product.sku || 'DEL'}-${Date.now().toString().slice(-6)}`;
         product.slug = `${product.slug}-${Date.now()}`;
-        await this.productsRepository.save(product);
-        
-        // Logger l'audit comme archivage au lieu de suppression dure
+        await this.repo.save(product);
         await this.auditService.log({
           userName: 'Système',
           action: AuditAction.UPDATE,
           resource: 'Product',
           resourceId: productId,
-          details: `Archivage automatique (Soft Delete) suite à contrainte de liaison pour: ${productName}`,
+          details: `Archivage automatique suite à contrainte pour: ${productName}`,
         });
       } else {
         throw error;
@@ -400,7 +290,7 @@ export class ProductsService {
   async toggleStatus(id: string): Promise<Product> {
     const product = await this.findOne(id);
     product.isActive = !product.isActive;
-    const saved = await this.productsRepository.save(product);
+    const saved = await this.repo.save(product);
     await (this.cacheManager as any).clear();
     return saved;
   }
@@ -408,45 +298,31 @@ export class ProductsService {
   async toggleFeatured(id: string): Promise<Product> {
     const product = await this.findOne(id);
     product.isFeatured = !product.isFeatured;
-    const saved = await this.productsRepository.save(product);
+    const saved = await this.repo.save(product);
     await (this.cacheManager as any).clear();
     return saved;
   }
 
-  async updateStock(
-    id: string,
-    updateStockDto: UpdateStockDto,
-    userId?: string,
-  ): Promise<Product> {
+  async updateStock(id: string, updateStockDto: UpdateStockDto, userId?: string): Promise<Product> {
     const product = await this.findOne(id);
     let movementType: StockMovementType;
     let quantity = updateStockDto.quantity;
 
-    switch (updateStockDto.operation) {
-      case StockOperation.SET:
-        // Pour SET, on calcule la différence pour créer un mouvement IN ou OUT
-        const diff = updateStockDto.quantity - product.stock;
-        if (diff === 0) return product;
-        
-        movementType = diff > 0 ? StockMovementType.IN : StockMovementType.OUT;
-        quantity = Math.abs(diff);
-        break;
-      case StockOperation.ADD:
-        movementType = StockMovementType.IN;
-        break;
-      case StockOperation.REMOVE:
-        movementType = StockMovementType.OUT;
-        break;
-      default:
-        throw new BadRequestException('Opération de stock non reconnue');
+    if (updateStockDto.operation === StockOperation.SET) {
+      const diff = updateStockDto.quantity - product.stock;
+      if (diff === 0) return product;
+      movementType = diff > 0 ? StockMovementType.IN : StockMovementType.OUT;
+      quantity = Math.abs(diff);
+    } else {
+      movementType = updateStockDto.operation === StockOperation.ADD ? StockMovementType.IN : StockMovementType.OUT;
     }
 
     await this.stockService.createMovement({
       productId: id,
       type: movementType,
-      quantity: quantity,
-      reason: updateStockDto.reason || 'Mise à jour manuelle du stock',
-      userId: userId,
+      quantity,
+      reason: updateStockDto.reason || 'Mise à jour manuelle',
+      userId,
       allowNegative: updateStockDto.allowNegative,
     });
 
@@ -455,26 +331,22 @@ export class ProductsService {
   }
 
   async getLowStockProducts(threshold?: number): Promise<Product[]> {
-    const products = await this.productsRepository.find({
+    const products = await this.repo.find({
       where: { isActive: true },
       relations: ['category', 'supplier'],
     });
-
-    return products.filter(
-      (product) =>
-        product.stock > 0 && product.stock <= (threshold || product.minStock),
-    );
+    return products.filter(p => p.stock > 0 && p.stock <= (threshold || p.minStock));
   }
 
   async getOutOfStockProducts(): Promise<Product[]> {
-    return await this.productsRepository.find({
+    return await this.repo.find({
       where: { stock: 0, isActive: true },
       relations: ['category', 'supplier'],
     });
   }
 
   async getFeaturedProducts(limit: number = 10): Promise<Product[]> {
-    return await this.productsRepository.find({
+    return await this.repo.find({
       where: { isFeatured: true, isActive: true },
       relations: ['category'],
       take: limit,
@@ -483,7 +355,7 @@ export class ProductsService {
   }
 
   async getProductsByCategory(categoryId: string): Promise<Product[]> {
-    return await this.productsRepository.find({
+    return await this.repo.find({
       where: { categoryId, isActive: true },
       relations: ['category'],
       order: { name: 'ASC' },
@@ -491,7 +363,7 @@ export class ProductsService {
   }
 
   async getProductsBySupplier(supplierId: string): Promise<Product[]> {
-    return await this.productsRepository.find({
+    return await this.repo.find({
       where: { supplierId, isActive: true },
       relations: ['supplier'],
       order: { name: 'ASC' },
@@ -499,13 +371,11 @@ export class ProductsService {
   }
 
   async searchProducts(query: string): Promise<Product[]> {
-    return await this.productsRepository.find({
+    return await this.repo.find({
       where: [
         { name: Like(`%${query}%`) },
         { description: Like(`%${query}%`) },
         { sku: Like(`%${query}%`) },
-        { barcode: Like(`%${query}%`) },
-        { brand: Like(`%${query}%`) },
       ],
       relations: ['category'],
       take: 20,
@@ -513,7 +383,7 @@ export class ProductsService {
   }
  
   async getBestSellers(limit: number = 8): Promise<Product[]> {
-    return await this.productsRepository.find({
+    return await this.repo.find({
       where: { isActive: true },
       relations: ['category'],
       order: { salesCount: 'DESC' },
@@ -523,70 +393,38 @@ export class ProductsService {
  
   async getRecommended(productId?: string, limit: number = 4): Promise<Product[]> {
     let categoryId: string | undefined;
-    
     if (productId) {
-      try {
-        const product = await this.findOne(productId);
-        categoryId = product.categoryId;
-      } catch (error) {
-        // Ignorer l'erreur si produit introuvable
-      }
+      const p = await this.repo.findOne({ where: { id: productId } });
+      categoryId = p?.categoryId;
     }
  
-    const baseWhere: any = { isActive: true };
     let results: Product[] = [];
-
-    // Priorité à la même catégorie
     if (categoryId) {
-      const sameCat = await this.productsRepository.find({
-        where: productId ? { isActive: true, categoryId } : { isActive: true, categoryId },
+      results = await this.repo.find({
+        where: { isActive: true, categoryId },
         relations: ['category'],
         order: { salesCount: 'DESC' },
         take: limit * 2,
       });
-      results = sameCat.filter(p => p.id !== productId);
+      results = results.filter(p => p.id !== productId);
     }
 
-    // Compléter avec d'autres produits
     if (results.length < limit) {
-      const existingIds = results.map(p => p.id);
-      if (productId) existingIds.push(productId);
-
-      const others = await this.productsRepository.find({
-        where: { ...baseWhere },
+      const others = await this.repo.find({
+        where: { isActive: true },
         relations: ['category'],
         order: { salesCount: 'DESC' },
-        take: limit * 3, // On prend plus pour mélanger
+        take: limit * 3,
       });
-
-      const filtered = others.filter(p => !existingIds.includes(p.id));
-      results = [...results, ...filtered];
+      results = [...results, ...others.filter(p => p.id !== productId && !results.find(r => r.id === p.id))];
     }
 
-    // Mélanger un peu pour la diversité (pas 100% aléatoire mais simule RANDOM())
-    results = results.sort(() => Math.random() - 0.5);
-
-    return results.slice(0, limit);
-  }
-
-  async bulkUpdateStock(
-    updates: { id: string; stock: number }[],
-  ): Promise<Product[]> {
-    const updatedProducts: Product[] = [];
-
-    for (const update of updates) {
-      const product = await this.findOne(update.id);
-      product.stock = Math.max(0, update.stock);
-      updatedProducts.push(await this.productsRepository.save(product));
-    }
-
-    return updatedProducts;
+    return results.sort(() => Math.random() - 0.5).slice(0, limit);
   }
 
   async duplicateProduct(id: string): Promise<Product> {
     const product = await this.findOne(id);
-
-    const duplicatedProduct = this.productsRepository.create({
+    const duplicatedProduct = this.repo.create({
       ...product,
       id: undefined,
       name: `${product.name} (Copy)`,
@@ -594,40 +432,25 @@ export class ProductsService {
       slug: `${product.slug}-copy-${Date.now()}`,
       stock: 0,
       isActive: false,
-      createdAt: undefined,
-      updatedAt: undefined
     });
-
-    return await this.productsRepository.save(duplicatedProduct);
+    return await this.repo.save(duplicatedProduct);
   }
 
-  async reviewVendorProduct(
-    id: string,
-    status: 'APPROVED' | 'REJECTED' | 'PENDING',
-    reason?: string,
-  ): Promise<Product> {
+  async reviewVendorProduct(id: string, status: string, reason?: string): Promise<Product> {
     const product = await this.findOne(id);
     product.approvalStatus = status as any;
     product.rejectionReason = reason ?? null;
+    product.isActive = status === 'APPROVED';
 
-    // If approved, make sure it's active
-    if (status === 'APPROVED') {
-      product.isActive = true;
-    } else {
-      product.isActive = false;
-    }
-
-    const saved = await this.productsRepository.save(product);
-
+    const saved = await this.repo.save(product);
     await this.auditService.log({
       userName: 'Système',
       action: AuditAction.UPDATE,
       resource: 'Product',
       resourceId: saved.id,
-      details: `Révision produit vendeur: ${status}${reason ? ` (Raison: ${reason})` : ''}`,
+      details: `Révision produit: ${status}`,
       newData: saved,
     });
-
     await (this.cacheManager as any).clear();
     return saved;
   }

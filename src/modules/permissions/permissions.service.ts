@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Permission } from './entities/permission.entity';
@@ -6,11 +6,15 @@ import { PermissionResponseDto } from './dto/permission-response.dto';
 import { resources } from 'src/common/variable/global';
 
 @Injectable()
-export class PermissionsService {
+export class PermissionsService implements OnModuleInit {
   constructor(
     @InjectRepository(Permission)
     private permissionsRepository: Repository<Permission>,
   ) {}
+
+  async onModuleInit() {
+    await this.createDefaultPermissions();
+  }
 
   async findAll(): Promise<PermissionResponseDto[]> {
     const permissions = await this.permissionsRepository.find({

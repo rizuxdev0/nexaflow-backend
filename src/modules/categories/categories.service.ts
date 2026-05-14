@@ -13,57 +13,51 @@ import {
   PaginatedResponse,
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class CategoriesService {
+export class CategoriesService extends AbstractTenantService<Category> {
   constructor(
     @InjectRepository(Category)
     private categoriesRepository: Repository<Category>,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(categoriesRepository, tenantService, 'Category');
+  }
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
-    // Vérifier si le nom existe déjà
-    const existingCategory = await this.categoriesRepository.findOne({
+    const existingCategory = await this.repo.findOne({
       where: { name: createCategoryDto.name },
     });
 
     if (existingCategory) {
-      throw new ConflictException(
-        `Une catégorie avec le nom "${createCategoryDto.name}" existe déjà`,
-      );
+      throw new ConflictException(`Une catégorie avec le nom "${createCategoryDto.name}" existe déjà`);
     }
 
-    // Générer le slug
     const slug = this.generateSlug(createCategoryDto.name);
-
-    // Vérifier si le slug est unique
-    const existingSlug = await this.categoriesRepository.findOne({
-      where: { slug },
-    });
+    const existingSlug = await this.repo.findOne({ where: { slug } });
 
     if (existingSlug) {
       throw new ConflictException(`Le slug "${slug}" existe déjà`);
     }
 
-    // Vérifier si la catégorie parente existe
     if (createCategoryDto.parentId) {
-      const parentCategory = await this.categoriesRepository.findOne({
+      const parentCategory = await this.repo.findOne({
         where: { id: createCategoryDto.parentId },
       });
-
       if (!parentCategory) {
-        throw new NotFoundException(
-          `Catégorie parente avec l'ID "${createCategoryDto.parentId}" non trouvée`,
-        );
+        throw new NotFoundException(`Catégorie parente avec l'ID "${createCategoryDto.parentId}" non trouvée`);
       }
     }
 
-    const category = this.categoriesRepository.create({
+    const category = this.repo.create({
       ...createCategoryDto,
       slug,
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
 
-    return await this.categoriesRepository.save(category);
+    return await this.repo.save(category);
   }
 
   async findAll(
@@ -82,7 +76,7 @@ export class CategoriesService {
       where.isActive = isActive;
     }
 
-    const [data, total] = await this.categoriesRepository.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       relations: ['parent', 'children'],
       skip: (page - 1) * pageSize,
@@ -93,7 +87,7 @@ export class CategoriesService {
     // Ajouter le compteur de produits
     const dataWithCounts = await Promise.all(
       data.map(async (category) => {
-        const result = await this.categoriesRepository
+        const result = await this.repo
           .createQueryBuilder('category')
           .leftJoin('category.products', 'products')
           .where('category.id = :id', { id: category.id })
@@ -107,93 +101,60 @@ export class CategoriesService {
       }),
     );
 
-    return PaginatedResponseBuilder.build(
-      dataWithCounts,
-      total,
-      page,
-      pageSize,
-    );
+    return PaginatedResponseBuilder.build(dataWithCounts, total, page, pageSize);
   }
 
   async findOne(id: string): Promise<Category> {
-    const category = await this.categoriesRepository.findOne({
-      where: { id },
-      relations: ['parent', 'children', 'products'],
-    });
-
-    if (!category) {
-      throw new NotFoundException(`Catégorie avec l'ID "${id}" non trouvée`);
-    }
-
-    return category;
+    return super.findOne(id, ['parent', 'children', 'products']);
   }
 
   async findBySlug(slug: string): Promise<Category> {
-    const category = await this.categoriesRepository.findOne({
+    const category = await this.repo.findOne({
       where: { slug },
       relations: ['parent', 'children', 'products'],
     });
 
     if (!category) {
-      throw new NotFoundException(
-        `Catégorie avec le slug "${slug}" non trouvée`,
-      );
+      throw new NotFoundException(`Catégorie avec le slug "${slug}" non trouvée`);
     }
 
     return category;
   }
 
-  async update(
-    id: string,
-    updateCategoryDto: UpdateCategoryDto,
-  ): Promise<Category> {
+  async update(id: string, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
     const category = await this.findOne(id);
 
-    // Vérifier si le nom est modifié et unique
     if (updateCategoryDto.name && updateCategoryDto.name !== category.name) {
-      const existingCategory = await this.categoriesRepository.findOne({
+      const existingCategory = await this.repo.findOne({
         where: { name: updateCategoryDto.name },
       });
 
       if (existingCategory && existingCategory.id !== id) {
-        throw new ConflictException(
-          `Une catégorie avec le nom "${updateCategoryDto.name}" existe déjà`,
-        );
+        throw new ConflictException(`Une catégorie avec le nom "${updateCategoryDto.name}" existe déjà`);
       }
-
-      // Mettre à jour le slug
       category.slug = this.generateSlug(updateCategoryDto.name);
     }
 
-    // Vérifier la catégorie parente
     if (updateCategoryDto.parentId) {
-      // Empêcher de se définir comme parent
       if (updateCategoryDto.parentId === id) {
-        throw new BadRequestException(
-          'Une catégorie ne peut pas être son propre parent',
-        );
+        throw new BadRequestException('Une catégorie ne peut pas être son propre parent');
       }
-
-      const parentCategory = await this.categoriesRepository.findOne({
+      const parentCategory = await this.repo.findOne({
         where: { id: updateCategoryDto.parentId },
       });
-
       if (!parentCategory) {
-        throw new NotFoundException(
-          `Catégorie parente avec l'ID "${updateCategoryDto.parentId}" non trouvée`,
-        );
+        throw new NotFoundException(`Catégorie parente avec l'ID "${updateCategoryDto.parentId}" non trouvée`);
       }
     }
 
     Object.assign(category, updateCategoryDto);
-    return await this.categoriesRepository.save(category);
+    return await this.repo.save(category);
   }
 
   async remove(id: string): Promise<void> {
     const category = await this.findOne(id);
 
-    // Vérifier si la catégorie a des produits (réellement)
-    const result = await this.categoriesRepository
+    const result = await this.repo
       .createQueryBuilder('category')
       .innerJoin('category.products', 'products')
       .where('category.id = :id', { id })
@@ -201,59 +162,51 @@ export class CategoriesService {
       .getRawOne();
 
     const actualProductsCount = parseInt(result.count) || 0;
-
     if (actualProductsCount > 0) {
-      throw new BadRequestException(
-        `Impossible de supprimer la catégorie car elle contient ${actualProductsCount} produit(s)`,
-      );
+      throw new BadRequestException(`Impossible de supprimer la catégorie car elle contient ${actualProductsCount} produit(s)`);
     }
 
-    // Vérifier si la catégorie a des enfants
-    const childrenCount = await this.categoriesRepository.count({
+    const childrenCount = await this.repo.count({
       where: { parentId: id },
     });
 
     if (childrenCount > 0) {
-      throw new BadRequestException(
-        `Impossible de supprimer la catégorie car elle a ${childrenCount} sous-catégorie(s)`,
-      );
+      throw new BadRequestException(`Impossible de supprimer la catégorie car elle a ${childrenCount} sous-catégorie(s)`);
     }
 
-    await this.categoriesRepository.remove(category);
+    await this.repo.remove(category);
   }
 
   async toggleStatus(id: string): Promise<Category> {
     const category = await this.findOne(id);
     category.isActive = !category.isActive;
-    return await this.categoriesRepository.save(category);
+    return await this.repo.save(category);
   }
 
   async findAllFlat(): Promise<Category[]> {
-    return await this.categoriesRepository.find({
+    return await this.repo.find({
       where: { isActive: true },
       order: { name: 'ASC' },
     });
   }
 
   async getCategoryTree(): Promise<Category[]> {
-    const categories = await this.categoriesRepository.find({
-      //   where: { parentId: null },
+    return await this.repo.find({
       where: { parentId: IsNull() },
       relations: ['children', 'children.children'],
       order: { name: 'ASC' },
     });
-
-    return categories;
   }
 
   private generateSlug(name: string): string {
     return name
       .toLowerCase()
       .trim()
-      .replace(/[^\w\s-]/g, '') // Enlève les caractères spéciaux
-      .replace(/[\s_-]+/g, '-') // Remplace les espaces et underscores par des tirets
-      .replace(/^-+|-+$/g, ''); // Enlève les tirets au début et à la fin
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   }
+}
 
   //   private generateSlug(name: string): string {
   //     return slugify.default(name, {

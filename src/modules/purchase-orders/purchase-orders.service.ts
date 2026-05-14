@@ -9,6 +9,7 @@ import { StockService } from '../stock/stock.service';
 import { StockMovementType } from '../stock/entities/stock-movement.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 
 @Injectable()
@@ -22,11 +23,13 @@ export class PurchaseOrdersService {
     private readonly productRepository: Repository<Product>,
     private readonly stockService: StockService,
     private readonly auditService: AuditService,
+    private readonly tenantService: TenantService,
   ) {}
 
   async findAll(query: { page?: number; pageSize?: number; status?: string; supplierId?: string }) {
     const { page = 1, pageSize = 20, status, supplierId } = query;
-    const where: any = {};
+    const vendorId = this.tenantService.getVendorId();
+    const where: any = { vendorId: vendorId || undefined };
     if (status) where.status = status;
     if (supplierId) where.supplierId = supplierId;
 
@@ -42,8 +45,9 @@ export class PurchaseOrdersService {
   }
 
   async findOne(id: string) {
+    const vendorId = this.tenantService.getVendorId();
     const po = await this.poRepository.findOne({ 
-      where: { id },
+      where: { id, vendorId: vendorId || undefined },
       relations: ['supplier']
     });
     if (!po) throw new NotFoundException('Bon de commande non trouvé');
@@ -51,7 +55,8 @@ export class PurchaseOrdersService {
   }
 
   async create(dto: CreatePurchaseOrderDto) {
-    const supplier = await this.supplierRepository.findOne({ where: { id: dto.supplierId } });
+    const vendorId = this.tenantService.getVendorId();
+    const supplier = await this.supplierRepository.findOne({ where: { id: dto.supplierId, vendorId: vendorId || undefined } });
     if (!supplier) throw new NotFoundException('Fournisseur non trouvé');
 
     const poNumber = await this.generatePoNumber();
@@ -59,6 +64,7 @@ export class PurchaseOrdersService {
       ...dto,
       poNumber,
       status: PurchaseOrderStatus.DRAFT,
+      vendorId: vendorId || undefined,
     });
 
     const saved = await this.poRepository.save(po);
@@ -146,10 +152,12 @@ export class PurchaseOrdersService {
   }
 
   async getSuggestions(userId?: string) {
+    const vendorId = this.tenantService.getVendorId();
     // 1. Identify products whose stock (current + pending) is below minStock
     // We need to account for products already being ordered (status draft, sent, confirmed, partial)
     const activePOs = await this.poRepository.createQueryBuilder('po')
       .where('po.status NOT IN (:...excluded)', { excluded: [PurchaseOrderStatus.RECEIVED, PurchaseOrderStatus.CANCELLED] })
+      .andWhere('po.vendorId = :vendorId', { vendorId: vendorId || null })
       .getMany();
 
     const pendingQuantities = new Map<string, number>();
@@ -162,7 +170,10 @@ export class PurchaseOrdersService {
     });
 
     // 2. Fetch all products to check stock levels
-    const allProducts = await this.productRepository.find({ relations: ['supplier'] });
+    const allProducts = await this.productRepository.find({ 
+      where: { vendorId: vendorId || undefined },
+      relations: ['supplier'] 
+    });
     console.log(`[PO Suggestions] Analyzing ${allProducts.length} products...`);
     
     // Filter products that actually need replenishment
@@ -250,9 +261,10 @@ export class PurchaseOrdersService {
   }
 
   private async generatePoNumber(): Promise<string> {
+    const vendorId = this.tenantService.getVendorId();
     const date = new Date();
     const prefix = `PO-${date.getFullYear()}${ (date.getMonth() + 1).toString().padStart(2, '0') }`;
-    const count = await this.poRepository.count();
+    const count = await this.poRepository.count({ where: { vendorId: vendorId || undefined } });
     return `${prefix}-${(count + 1).toString().padStart(4, '0')}`;
   }
 }

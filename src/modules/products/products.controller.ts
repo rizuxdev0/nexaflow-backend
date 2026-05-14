@@ -17,6 +17,7 @@ import * as express from 'express';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { PermissionsGuard } from 'src/common/guards/permissions.guard';
+import { QuotaGuard, CheckQuota } from 'src/common/guards/quota.guard';
 import {
   ApiTags,
   ApiOperation,
@@ -69,9 +70,12 @@ export class ProductsController {
   // ============ ENDPOINTS POUR PRODUITS ============
   @Post()
   @Permissions('products.create')
+  @UseGuards(QuotaGuard)
+  @CheckQuota('products')
   @ApiOperation({ summary: 'Créer un nouveau produit' })
   @ApiResponse({ status: 201, description: 'Produit créé avec succès' })
   @ApiResponse({ status: 409, description: 'SKU ou slug déjà existant' })
+  @ApiResponse({ status: 403, description: 'Quota de produits atteint pour votre plan' })
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createProductDto: CreateProductDto): Promise<Product> {
     return this.productsService.create(createProductDto);

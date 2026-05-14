@@ -3,51 +3,55 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Branch } from './entities/branch.entity';
 import { CreateBranchDto, UpdateBranchDto } from './dto/branch.dto';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class BranchesService {
+export class BranchesService extends AbstractTenantService<Branch> {
   constructor(
     @InjectRepository(Branch)
     private readonly branchRepository: Repository<Branch>,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(branchRepository, tenantService, 'Branch');
+  }
 
   async findAll() {
-    return this.branchRepository.find({ 
+    return super.findAll({ 
       relations: ['warehouses'],
       order: { isMain: 'DESC', name: 'ASC' }
     });
   }
 
   async findOne(id: string) {
-    const branch = await this.branchRepository.findOne({ 
-      where: { id },
-      relations: ['warehouses']
-    });
-    if (!branch) throw new NotFoundException('Branch not found');
-    return branch;
+    return super.findOne(id, ['warehouses']);
   }
 
   async create(dto: CreateBranchDto) {
-    // If setting as main, unset others
+    const vendorId = this.tenantService.getVendorId();
+    // If setting as main, unset others for this vendor
     if (dto.isMain) {
-      await this.branchRepository.update({ isMain: true }, { isMain: false });
+      await this.repo.update({ isMain: true }, { isMain: false });
     }
-    const branch = this.branchRepository.create(dto);
-    return this.branchRepository.save(branch);
+    const branch = this.repo.create({
+      ...dto,
+      vendorId: vendorId || undefined,
+    });
+    return this.repo.save(branch);
   }
 
   async update(id: string, dto: UpdateBranchDto) {
     const branch = await this.findOne(id);
     if (dto.isMain && !branch.isMain) {
-      await this.branchRepository.update({ isMain: true }, { isMain: false });
+      await this.repo.update({ isMain: true }, { isMain: false });
     }
     Object.assign(branch, dto);
-    return this.branchRepository.save(branch);
+    return this.repo.save(branch);
   }
 
   async remove(id: string) {
     const branch = await this.findOne(id);
     if (branch.isMain) throw new BadRequestException('Cannot delete the main branch');
-    return this.branchRepository.remove(branch);
+    return super.remove(id);
   }
 }

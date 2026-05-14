@@ -26,6 +26,11 @@ import { CategoriesService } from '../categories/categories.service';
 import { SuppliersService } from '../suppliers/suppliers.service';
 import { StoreConfigService } from '../store-config/store-config.service';
 import { CustomersService } from '../customers/customers.service';
+import { RegisterBusinessDto } from './dto/register-business.dto';
+import { VendorsService } from '../vendors/vendors.service';
+import { BranchesService } from '../branches/branches.service';
+import { WarehousesService } from '../warehouses/warehouses.service';
+import { VendorStatus } from '../vendors/entities/vendor.entity';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -40,6 +45,9 @@ export class AuthService implements OnModuleInit {
     private configService: ConfigService,
     private storeConfigService: StoreConfigService,
     private customersService: CustomersService,
+    private vendorsService: VendorsService,
+    private branchesService: BranchesService,
+    private warehousesService: WarehousesService,
   ) {}
 
   async onModuleInit() {
@@ -198,6 +206,91 @@ export class AuthService implements OnModuleInit {
     return this.generateAuthResponse(userWithRole);
   }
 
+  // ============ INSCRIPTION BUSINESS (ONBOARDING SaaS) ============
+
+  async registerBusiness(dto: RegisterBusinessDto): Promise<AuthResponseDto> {
+    // 1. Vérifier si l'email existe déjà
+    const existingUser = await this.usersService.findByEmail(dto.email).catch(() => null);
+    if (existingUser) {
+      throw new ConflictException('Un compte avec cet email existe déjà');
+    }
+
+    // 2. Récupérer le rôle "admin" (Propriétaire de l'entreprise)
+    const adminRole = await this.rolesService.findByName('admin');
+    if (!adminRole) {
+      throw new BadRequestException('Rôle admin non configuré');
+    }
+
+    // 3. Créer l'Utilisateur (Admin)
+    const user = await this.usersService.create({
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      email: dto.email,
+      password: dto.password,
+      phone: dto.phone,
+      roleId: adminRole.id,
+      isActive: true,
+    });
+
+    // 4. Créer le Vendeur (Entreprise)
+    const vendor = await this.vendorsService.create({
+      name: dto.companyName,
+      email: dto.email,
+      phone: dto.phone,
+      address: dto.address,
+      country: dto.country || 'Sénégal',
+      status: VendorStatus.ACTIVE,
+      userId: user.id, // Lien vers le propriétaire
+    });
+
+    // 5. Lier l'utilisateur au vendeur
+    await this.usersService.update(user.id, { vendorId: vendor.id } as any);
+
+    // 6. Créer la Succursale par défaut
+    const branch = await this.branchesService.create({
+      name: 'Succursale Principale',
+      code: `BR-${vendor.id.slice(0, 4).toUpperCase()}`,
+      address: dto.address,
+      city: 'Dakar',
+      country: dto.country || 'Sénégal',
+      phone: dto.phone || '',
+      email: dto.email,
+      isMain: true,
+      isActive: true,
+      vendorId: vendor.id, // Forcer l'ID car le subscriber n'a pas encore le contexte
+    } as any);
+
+    // 7. Créer l'Entrepôt par défaut
+    await this.warehousesService.create({
+      name: 'Entrepôt Principal',
+      code: `WH-${vendor.id.slice(0, 4).toUpperCase()}`,
+      address: dto.address,
+      city: 'Dakar',
+      branchId: branch.id,
+      isActive: true,
+      vendorId: vendor.id,
+    } as any);
+
+    // 8. Initialiser la Configuration du Store
+    await this.storeConfigService.update({
+      storeName: dto.companyName,
+      storeEmail: dto.email,
+      storePhone: dto.phone,
+      address: dto.address,
+      currency: 'XOF',
+      subscriptionPlan: dto.planCode || 'starter',
+      subscriptionStatus: 'active',
+      vendorId: vendor.id,
+    } as any);
+
+    // 9. Recharger l'utilisateur avec son rôle et son vendeur pour la réponse
+    const userWithFullData = await this.usersService.findById(user.id, {
+      withRoleAndPermissions: true,
+    });
+
+    return this.generateAuthResponse(userWithFullData);
+  }
+
   // ============ CONNEXION ============
 
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
@@ -281,13 +374,12 @@ export class AuthService implements OnModuleInit {
 
       // Générer un token de réinitialisation
       const resetToken = uuidv4();
-      const hashedToken = await bcrypt.hash(resetToken, 10);
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 1); // Expire dans 1 heure
 
       await this.usersService.setResetPasswordToken(
         user.id,
-        hashedToken,
+        resetToken,
         expiresAt,
       );
 

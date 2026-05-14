@@ -99,4 +99,15 @@ export class CreatePosOrderDto {
   @IsString()
   @IsOptional()
   status?: string;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  discountTotal?: number;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
 }

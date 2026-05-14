@@ -21,6 +21,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
+import { RegisterBusinessDto } from './dto/register-business.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
@@ -37,6 +38,15 @@ export class AuthController {
   @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
   async register(@Body() registerDto: RegisterDto): Promise<AuthResponseDto> {
     return this.authService.register(registerDto);
+  }
+
+  @Public()
+  @Post('register-business')
+  @ApiOperation({ summary: "Inscription d'une nouvelle entreprise (SaaS Onboarding)" })
+  @ApiResponse({ status: 201, description: 'Entreprise et compte créés avec succès' })
+  @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
+  async registerBusiness(@Body() dto: RegisterBusinessDto): Promise<AuthResponseDto> {
+    return this.authService.registerBusiness(dto);
   }
 
   @Public()

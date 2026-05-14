@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 export interface BundleItem {
   productId: string;
@@ -59,6 +62,13 @@ export class ProductBundle {
 
   @Column({ default: 1 })
   heroPriority: number;
+
+  @ManyToOne(() => Vendor)
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @CreateDateColumn()
   createdAt: Date;

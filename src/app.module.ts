@@ -69,6 +69,8 @@ import { ChatModule } from './modules/chat/chat.module';
 import { VendorsModule } from './modules/vendors/vendors.module';
 import { CustomerEventsModule } from './modules/customer-events/customer-events.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { TenantModule } from './common/tenant/tenant.module';
+import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
 
 @Module({
   imports: [
@@ -175,12 +177,13 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
     ChatModule,
     VendorsModule,
     CustomerEventsModule,
+    TenantModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',
     }),
   ],
-  controllers: [AppController, UsersController, RolesController],
+  controllers: [AppController],
   providers: [
     AppService,
     // ============ GLOBAL INTERCEPTORS ============
@@ -203,6 +206,10 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor, // ← Ajouter l'intercepteur d'audit
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantInterceptor,
     },
 
     // ============ GLOBAL FILTERS ============

@@ -3,54 +3,57 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Testimonial } from './entities/testimonial.entity';
 import { CreateTestimonialDto, UpdateTestimonialDto } from './dto/testimonial.dto';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class TestimonialsService {
+export class TestimonialsService extends AbstractTenantService<Testimonial> {
   constructor(
     @InjectRepository(Testimonial)
     private readonly testimonialRepository: Repository<Testimonial>,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(testimonialRepository, tenantService, 'Testimonial');
+  }
 
   async findAllActive() {
-    return this.testimonialRepository.find({
+    return this.repo.find({
       where: { isActive: true },
-      order: { displayOrder: 'ASC', createdAt: 'DESC' },
+      order: { displayOrder: 'ASC', createdAt: 'DESC' } as any,
     });
   }
 
   async findAll() {
-    return this.testimonialRepository.find({
-      order: { displayOrder: 'ASC', createdAt: 'DESC' },
+    return this.repo.find({
+      order: { displayOrder: 'ASC', createdAt: 'DESC' } as any,
     });
   }
 
   async findOne(id: string) {
-    const testimonial = await this.testimonialRepository.findOne({ where: { id } });
-    if (!testimonial) {
-      throw new NotFoundException(`Témoignage avec l'ID "${id}" non trouvé.`);
-    }
-    return testimonial;
+    return super.findOne(id);
   }
 
   async create(createTestimonialDto: CreateTestimonialDto) {
-    const testimonial = this.testimonialRepository.create(createTestimonialDto);
-    return this.testimonialRepository.save(testimonial);
+    const testimonial = this.repo.create({
+      ...createTestimonialDto,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    return this.repo.save(testimonial);
   }
 
   async update(id: string, updateTestimonialDto: UpdateTestimonialDto) {
     const testimonial = await this.findOne(id);
-    this.testimonialRepository.merge(testimonial, updateTestimonialDto);
-    return this.testimonialRepository.save(testimonial);
+    this.repo.merge(testimonial, updateTestimonialDto);
+    return this.repo.save(testimonial);
   }
 
   async remove(id: string) {
-    const testimonial = await this.findOne(id);
-    await this.testimonialRepository.remove(testimonial);
+    return super.remove(id);
   }
 
   async toggleActive(id: string) {
     const testimonial = await this.findOne(id);
     testimonial.isActive = !testimonial.isActive;
-    return this.testimonialRepository.save(testimonial);
+    return this.repo.save(testimonial);
   }
 }

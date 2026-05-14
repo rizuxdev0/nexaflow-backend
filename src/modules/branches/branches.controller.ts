@@ -7,6 +7,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
+import { QuotaGuard, CheckQuota } from '../../common/guards/quota.guard';
+
 @ApiTags('branches')
 @ApiBearerAuth()
 @Controller('branches')
@@ -26,6 +28,8 @@ export class BranchesController {
 
   @Post()
   @Roles('admin', 'super_admin')
+  @UseGuards(QuotaGuard)
+  @CheckQuota('branches')
   create(@Body() dto: CreateBranchDto) {
     return this.branchesService.create(dto);
   }

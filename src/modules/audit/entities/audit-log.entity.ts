@@ -62,6 +62,9 @@ export class AuditLog {
   @Column({ nullable: true })
   userAgent: string;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @CreateDateColumn()
   timestamp: Date;
 }

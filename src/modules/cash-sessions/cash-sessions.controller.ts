@@ -114,6 +114,23 @@ export class CashSessionsController {
     );
   }
 
+  @Get('movements')
+  @ApiOperation({ summary: 'Liste des mouvements de caisse' })
+  @ApiResponse({ status: 200, description: 'Liste des mouvements' })
+  async getMovements(
+    @Query() paginationDto: PaginationDto,
+    @Query('sessionId') sessionId?: string,
+  ) {
+    // TODO: Implémenter la récupération réelle des mouvements si nécessaire
+    return {
+      data: [],
+      total: 0,
+      page: paginationDto.page || 1,
+      pageSize: paginationDto.pageSize || 10,
+      totalPages: 0,
+    };
+  }
+
   @Get(':id')
   @ApiOperation({ summary: "Détail d'une session" })
   @ApiParam({ name: 'id', description: 'ID de la session' })

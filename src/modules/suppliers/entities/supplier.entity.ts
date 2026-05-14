@@ -8,6 +8,8 @@ import {
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { PurchaseOrder } from '../../purchase-orders/entities/purchase-order.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
+import { ManyToOne, JoinColumn } from 'typeorm';
 
 @Entity('suppliers')
 export class Supplier {
@@ -55,6 +57,13 @@ export class Supplier {
 
   @OneToMany(() => PurchaseOrder, (po) => po.supplier)
   purchaseOrders: PurchaseOrder[];
+
+  @ManyToOne(() => Vendor)
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @CreateDateColumn()
   createdAt: Date;

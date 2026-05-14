@@ -37,6 +37,7 @@ import { Warehouse } from '../warehouses/entities/warehouse.entity';
 import { CustomersModule } from '../customers/customers.module';
 import { ProductsModule } from '../products/products.module';
 import { InvoicesModule } from '../invoices/invoices.module';
+import { StoreConfigModule } from '../store-config/store-config.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { InvoicesModule } from '../invoices/invoices.module';
     CustomersModule,
     ProductsModule,
     InvoicesModule,
+    StoreConfigModule,
   ],
   controllers: [ShopController],
   providers: [ShopService],

@@ -9,6 +9,9 @@ import { Reflector } from '@nestjs/core';
 import { StoreConfigService } from '../../modules/store-config/store-config.service';
 import { PLAN_QUOTAS } from '../../modules/store-config/subscription-plans';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { SubscriptionPlan as PlanEntity } from '../../modules/subscriptions/entities/subscription-plan.entity';
 
 export const CHECK_PLAN_KEY = 'check_plan';
 export const CheckPlan = (feature: string) => SetMetadata(CHECK_PLAN_KEY, feature);
@@ -18,6 +21,8 @@ export class PlanGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private storeConfigService: StoreConfigService,
+    @InjectRepository(PlanEntity)
+    private readonly planRepo: Repository<PlanEntity>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -28,8 +33,21 @@ export class PlanGuard implements CanActivate {
       return true;
     }
 
-    const config = await this.storeConfigService.get();
-    const quotas = PLAN_QUOTAS[config.subscriptionPlan];
+    const request = context.switchToHttp().getRequest();
+    const vendorId = request.user?.vendorId;
+
+    const config = await this.storeConfigService.get(vendorId);
+    
+    // Fetch quotas from DB with fallback
+    let quotas = PLAN_QUOTAS[config.subscriptionPlan] as any;
+    try {
+      const dbPlan = await this.planRepo.findOne({ 
+        where: { code: config.subscriptionPlan, isActive: true } 
+      });
+      if (dbPlan) {
+        quotas = { ...quotas, ...dbPlan };
+      }
+    } catch (e) {}
 
     // Check if subscription is expired
     if (config.subscriptionStatus === 'expired') {

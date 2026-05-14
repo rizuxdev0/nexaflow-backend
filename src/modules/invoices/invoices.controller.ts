@@ -132,6 +132,34 @@ export class InvoicesController {
     return this.invoicesService.findByOrderNumber(orderNumber);
   }
 
+  // ============ NUMBERING CONFIG ============
+
+  @Get('config/numbering')
+  @ApiOperation({ summary: 'Récupérer la configuration de numérotation' })
+  getNumberingConfig() {
+    return this.invoicesService.getNumberingConfig();
+  }
+
+  @Patch('config/numbering')
+  @ApiOperation({ summary: 'Mettre à jour la configuration de numérotation' })
+  updateNumberingConfig(@Body() data: any) {
+    return this.invoicesService.updateNumberingConfig(data);
+  }
+
+  // ============ CREDIT NOTES ============
+
+  @Get('credit-notes')
+  @ApiOperation({ summary: 'Liste des avoirs' })
+  getCreditNotes(@Query('invoiceId') invoiceId?: string) {
+    return this.invoicesService.getCreditNotes(invoiceId);
+  }
+
+  @Post('credit-notes')
+  @ApiOperation({ summary: 'Créer un avoir' })
+  createCreditNote(@Body() data: any) {
+    return this.invoicesService.createCreditNote(data);
+  }
+
   // ============ GÉNÉRATION DE FACTURE ============
 
   @Post('from-order/:orderId')
@@ -183,6 +211,23 @@ export class InvoicesController {
     @Body() updateStatusDto: UpdateInvoiceStatusDto,
   ): Promise<InvoiceResponseDto> {
     return this.invoicesService.updateStatus(id, updateStatusDto);
+  }
+
+  @Post(':id/send-email')
+  @ApiOperation({ summary: 'Envoyer la facture par email' })
+  @ApiParam({ name: 'id', description: 'ID de la facture' })
+  sendByEmail(@Param('id') id: string) {
+    return this.invoicesService.sendByEmail(id);
+  }
+
+  @Patch(':id/convert')
+  @ApiOperation({ summary: 'Convertir la devise de la facture' })
+  @ApiParam({ name: 'id', description: 'ID de la facture' })
+  convertCurrency(
+    @Param('id') id: string,
+    @Body() data: { currencyCode: string; rate: number },
+  ) {
+    return this.invoicesService.convertCurrency(id, data.currencyCode, data.rate);
   }
 
   // ============ ACTIONS SUPPLÉMENTAIRES ============

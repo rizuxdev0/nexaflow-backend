@@ -8,13 +8,18 @@ import {
   PaginatedResponse,
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class AuditService {
+export class AuditService extends AbstractTenantService<AuditLog> {
   constructor(
     @InjectRepository(AuditLog)
     private auditRepository: Repository<AuditLog>,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(auditRepository, tenantService, 'AuditLog');
+  }
 
   async log(data: {
     userId?: string;
@@ -27,9 +32,69 @@ export class AuditService {
     newData?: any;
     ipAddress?: string;
     userAgent?: string;
+    vendorId?: string;
   }): Promise<AuditLog> {
-    const entry = this.auditRepository.create(data);
-    return await this.auditRepository.save(entry);
+    const entry = this.repo.create({
+      ...data,
+      vendorId: data.vendorId || this.tenantService.getVendorId() || undefined,
+    });
+    return await this.repo.save(entry);
+  }
+
+  /**
+   * Calcule la différence entre deux objets pour l'audit
+   */
+  calculateDiff(oldData: any, newData: any): { oldDiff: any; newDiff: any } {
+    if (!oldData || !newData) return { oldDiff: oldData, newDiff: newData };
+    
+    const oldDiff: any = {};
+    const newDiff: any = {};
+
+    const allKeys = new Set([...Object.keys(oldData), ...Object.keys(newData)]);
+
+    allKeys.forEach((key) => {
+      // Ignore les champs internes typeORM qui changent souvent automatiquement
+      if (key === 'updatedAt' || key === 'createdAt' || key === 'vendorId') return;
+
+      if (JSON.stringify(oldData[key]) !== JSON.stringify(newData[key])) {
+        oldDiff[key] = oldData[key];
+        newDiff[key] = newData[key];
+      }
+    });
+
+    return { oldDiff, newDiff };
+  }
+
+  /**
+   * Enregistre un log avec un diff calculé automatiquement
+   */
+  async logUpdateWithDiff(
+    baseData: {
+      userId?: string;
+      userName: string;
+      resource: string;
+      resourceId?: string;
+      details: string;
+      ipAddress?: string;
+      userAgent?: string;
+      vendorId?: string;
+    },
+    oldData: any,
+    newData: any
+  ): Promise<AuditLog | null> {
+    const { oldDiff, newDiff } = this.calculateDiff(oldData, newData);
+
+    // Ne rien loguer si aucune vraie différence n'est détectée
+    if (Object.keys(newDiff).length === 0) {
+      return null;
+    }
+
+    return this.log({
+      ...baseData,
+      action: AuditAction.UPDATE,
+      oldData: oldDiff,
+      newData: newDiff,
+    });
   }
 
   async findAll(
@@ -45,7 +110,7 @@ export class AuditService {
       endDate,
     } = filterDto;
 
-    const queryBuilder = this.auditRepository
+    const queryBuilder = this.repo
       .createQueryBuilder('audit')
       .leftJoinAndSelect('audit.user', 'user')
       .orderBy('audit.timestamp', 'DESC');
@@ -79,16 +144,16 @@ export class AuditService {
   }
 
   async getStats() {
-    const total = await this.auditRepository.count();
+    const total = await this.repo.count();
 
-    const byAction = await this.auditRepository
+    const byAction = await this.repo
       .createQueryBuilder('audit')
       .select('audit.action', 'action')
       .addSelect('COUNT(*)', 'count')
       .groupBy('audit.action')
       .getRawMany();
 
-    const byResource = await this.auditRepository
+    const byResource = await this.repo
       .createQueryBuilder('audit')
       .select('audit.resource', 'resource')
       .addSelect('COUNT(*)', 'count')
@@ -98,8 +163,8 @@ export class AuditService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayCount = await this.auditRepository.count({
-      where: { timestamp: Between(today, new Date()) },
+    const todayCount = await this.repo.count({
+      where: { timestamp: Between(today, new Date()) } as any,
     });
 
     return {

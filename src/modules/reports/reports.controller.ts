@@ -17,10 +17,12 @@ export class ReportsController {
   @Get('sales-overview')
   @Permissions('reports.read')
   getSalesOverview(
-    @Query('startDate') startDate?: Date, 
-    @Query('endDate') endDate?: Date
+    @Query('startDate') startDate?: string, 
+    @Query('endDate') endDate?: string,
+    @Query('branchId') branchId?: string,
+    @Query('sellerId') sellerId?: string,
   ) {
-    return this.reportsService.getSalesOverview(startDate, endDate);
+    return this.reportsService.getSalesOverview(startDate, endDate, branchId, sellerId);
   }
 
   @Get('top-products')

@@ -29,6 +29,7 @@ import {
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
 import { DataSource } from 'typeorm';
+import { StoreConfigService } from '../store-config/store-config.service';
 
 @Injectable()
 export class ShopService {
@@ -49,6 +50,7 @@ export class ShopService {
     private productsService: ProductsService,
     @Inject(forwardRef(() => InvoicesService))
     private invoicesService: InvoicesService,
+    private storeConfigService: StoreConfigService,
     private dataSource: DataSource,
   ) {}
 
@@ -284,6 +286,8 @@ export class ShopService {
         shippingAddress: createOrderDto.shippingAddress,
         shippingCity: createOrderDto.shippingCity,
         shippingCountry: createOrderDto.shippingCountry,
+        shippingLatitude: createOrderDto.shippingLatitude,
+        shippingLongitude: createOrderDto.shippingLongitude,
         notes: createOrderDto.notes,
         subtotal,
         taxTotal,
@@ -309,6 +313,20 @@ export class ShopService {
           );
         }
 
+        // Get shop configuration for tax
+        const config = await this.storeConfigService.get();
+        const pricesIncludeTax = config.checkout.tax.pricesIncludeTax === true;
+        const itemTotalPrice = product.price * item.quantity;
+        let itemTaxAmount = 0;
+
+        if (pricesIncludeTax) {
+          itemTaxAmount = Math.round(
+            itemTotalPrice - itemTotalPrice / (1 + product.taxRate / 100),
+          );
+        } else {
+          itemTaxAmount = Math.round((itemTotalPrice * product.taxRate) / 100);
+        }
+
         // Créer l'item
         const orderItem = this.orderItemsRepository.create({
           orderId: savedOrder.id,
@@ -317,9 +335,9 @@ export class ShopService {
           productSku: product.sku,
           quantity: item.quantity,
           unitPrice: product.price,
-          totalPrice: product.price * item.quantity,
+          totalPrice: itemTotalPrice,
           taxRate: product.taxRate,
-          taxAmount: (product.price * item.quantity * product.taxRate) / 100,
+          taxAmount: itemTaxAmount,
         });
         await queryRunner.manager.save(orderItem);
 
@@ -374,6 +392,9 @@ export class ShopService {
     let subtotal = 0;
     let taxTotal = 0;
 
+    const config = await this.storeConfigService.get();
+    const pricesIncludeTax = config.checkout.tax.pricesIncludeTax === true;
+
     const validatedItems = items.map((item) => {
       const product = products.find((p) => p.id === item.productId);
 
@@ -384,7 +405,13 @@ export class ShopService {
       }
 
       const itemTotal = product.price * item.quantity;
-      const itemTax = (itemTotal * product.taxRate) / 100;
+      let itemTax = 0;
+
+      if (pricesIncludeTax) {
+        itemTax = Math.round(itemTotal - itemTotal / (1 + product.taxRate / 100));
+      } else {
+        itemTax = Math.round((itemTotal * product.taxRate) / 100);
+      }
 
       subtotal += itemTotal;
       taxTotal += itemTax;
@@ -397,7 +424,7 @@ export class ShopService {
       };
     });
 
-    const total = subtotal + taxTotal;
+    const total = pricesIncludeTax ? subtotal : subtotal + taxTotal;
 
     return { items: validatedItems, subtotal, taxTotal, total };
   }
@@ -463,6 +490,8 @@ export class ShopService {
       subtotal: order.subtotal,
       taxTotal: order.taxTotal,
       total: order.total,
+      discountTotal: order.discountTotal,
+      promoCode: order.promoCode,
       paymentMethod: order.paymentMethod,
       status: order.status,
       paymentStatus: order.paymentStatus,

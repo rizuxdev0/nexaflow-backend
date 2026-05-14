@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { StoreConfig } from './entities/store-config.entity';
 import { UpdateStoreConfigDto } from './dto/update-store-config.dto';
 import { PLAN_QUOTAS, SubscriptionPlan } from './subscription-plans';
@@ -48,7 +48,11 @@ export class StoreConfigService {
     return raw.filter(p => p && typeof p === 'object' && !Array.isArray(p));
   }
 
-  async get(): Promise<StoreConfig> {
+  async get(vendorId?: string): Promise<StoreConfig> {
+    const cacheKey = `store_config_${vendorId || 'default'}`;
+    const cached = await this.cacheManager.get<StoreConfig>(cacheKey);
+    if (cached) return cached;
+
     const defaultPasswordPolicy = {
       minLength: 8,
       maxLength: 128,
@@ -62,11 +66,13 @@ export class StoreConfigService {
 
     const defaultFeatures = this.DEFAULT_FEATURES;
 
-    let config = await this.configRepository.findOne({ where: { id: 'default' } });
+    let config = await this.configRepository.findOne({ 
+      where: vendorId ? { vendorId } : { vendorId: IsNull() } 
+    });
     
     if (!config) {
       config = this.configRepository.create({
-        id: 'default',
+        vendorId: vendorId || undefined,
         subscriptionPlan: SubscriptionPlan.STARTER,
         subscriptionStatus: 'active',
         identity: {
@@ -79,6 +85,8 @@ export class StoreConfigService {
           country: 'Togo',
           logoUrl: '',
           faviconUrl: '',
+          currency: 'XOF',
+          currencySymbol: 'FCFA',
           socialLinks: {
             facebook: 'https://facebook.com',
             instagram: 'https://instagram.com',
@@ -112,7 +120,7 @@ export class StoreConfigService {
         }
       });
       const saved = await this.configRepository.save(config);
-      await (this.cacheManager as any).clear();
+      await this.cacheManager.set(cacheKey, saved, 3600);
       return saved;
     }
 
@@ -221,42 +229,18 @@ export class StoreConfigService {
     }
 
     if (changed) {
-      console.log('Force-syncing store configuration because changes were detected...');
-      await this.configRepository.query(
-        `UPDATE store_config 
-         SET identity = $1::jsonb, 
-             checkout = $2::jsonb, 
-             content = $3::jsonb, 
-             partners = $4::jsonb, 
-             features = $5::jsonb, 
-             appearance = $6::jsonb, 
-             security = $7::jsonb,
-             pixels = $8::jsonb,
-             seo = $9::jsonb,
-             social = $10::jsonb,
-             "updatedAt" = NOW()
-         WHERE id = 'default'`,
-        [
-          JSON.stringify(config.identity || {}),
-          JSON.stringify(config.checkout || {}),
-          JSON.stringify(config.content || {}),
-          JSON.stringify(config.partners || []),
-          JSON.stringify(config.features || []),
-          JSON.stringify(config.appearance || {}),
-          JSON.stringify(config.security || {}),
-          JSON.stringify(config.pixels || {}),
-          JSON.stringify(config.seo || {}),
-          JSON.stringify(config.social || {}),
-        ],
-      );
-      await (this.cacheManager as any).clear();
+      await this.configRepository.save(config);
+      await this.cacheManager.set(cacheKey, config, 3600);
+    } else {
+      await this.cacheManager.set(cacheKey, config, 3600);
     }
     
     return config;
   }
 
-  async update(updateStoreConfigDto: UpdateStoreConfigDto): Promise<StoreConfig> {
-    const config = await this.get();
+  async update(updateStoreConfigDto: UpdateStoreConfigDto, vendorId?: string): Promise<StoreConfig> {
+    const config = await this.get(vendorId);
+    const cacheKey = `store_config_${vendorId || 'default'}`;
     
     if (updateStoreConfigDto.identity) {
       config.identity = { ...config.identity, ...updateStoreConfigDto.identity };
@@ -320,35 +304,8 @@ export class StoreConfigService {
       timestamp: new Date().toISOString()
     };
 
-    await this.configRepository.query(
-      `UPDATE store_config 
-       SET identity = $1::jsonb, 
-           checkout = $2::jsonb, 
-           content = $3::jsonb, 
-           partners = $4::jsonb, 
-           features = $5::jsonb, 
-           appearance = $6::jsonb, 
-           security = $7::jsonb,
-           pixels = $8::jsonb,
-           seo = $9::jsonb,
-           social = $10::jsonb,
-           "updatedAt" = NOW()
-       WHERE id = 'default'`,
-      [
-        JSON.stringify(config.identity || {}),
-        JSON.stringify(config.checkout || {}),
-        JSON.stringify(config.content || {}),
-        JSON.stringify(config.partners || []),
-        JSON.stringify(config.features || []),
-        JSON.stringify(config.appearance || {}),
-        JSON.stringify(config.security || {}),
-        JSON.stringify(config.pixels || {}),
-        JSON.stringify(config.seo || {}),
-        JSON.stringify(config.social || {}),
-      ],
-    );
-    
-    await (this.cacheManager as any).clear();
+    await this.configRepository.save(config);
+    await this.cacheManager.set(cacheKey, config, 3600);
 
     return { ...config, _debug: debug } as any;
   }

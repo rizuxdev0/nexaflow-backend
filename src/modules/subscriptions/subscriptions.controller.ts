@@ -1,12 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Req, UseGuards } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { Public } from 'src/common/decorators/public.decorator';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Permissions } from 'src/common/decorators/permissions.decorator';
+import { PermissionsGuard } from 'src/common/guards/permissions.guard';
 
 @ApiTags('subscriptions')
 @Controller('subscriptions')
+@UseGuards(PermissionsGuard)
 export class SubscriptionsController {
   constructor(private readonly service: SubscriptionsService) {}
+
+  @ApiBearerAuth()
+  @Permissions('subscriptions.read')
+  @Get('admin/stats')
+  @ApiOperation({ summary: 'Récupérer les statistiques des abonnements (SuperAdmin)' })
+  getAdminStats() {
+    return this.service.getAdminStats();
+  }
 
   @Public()
   @Get('plans')

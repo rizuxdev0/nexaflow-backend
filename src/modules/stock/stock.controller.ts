@@ -25,4 +25,17 @@ export class StockController {
   getChart(@Query('days') days?: number) {
     return this.stockService.getMovementsChartData(days);
   }
+
+  @Get('transfers')
+  @Permissions('stock.read')
+  getTransfers(@Query() query: any) {
+    // TODO: Implémenter la vraie gestion des transferts
+    return {
+      data: [],
+      total: 0,
+      page: query.page || 1,
+      pageSize: query.pageSize || 10,
+      totalPages: 0,
+    };
+  }
 }

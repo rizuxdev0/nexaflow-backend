@@ -1,16 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { SubscriptionPlan } from './entities/subscription-plan.entity';
+import { Repository, Not, IsNull } from 'typeorm';
+import { SubscriptionPlan as SubscriptionPlanEntity } from './entities/subscription-plan.entity';
 import { User } from '../users/entities/user.entity';
+import { StoreConfig } from '../store-config/entities/store-config.entity';
 
 @Injectable()
 export class SubscriptionsService {
   constructor(
-    @InjectRepository(SubscriptionPlan)
-    private readonly repository: Repository<SubscriptionPlan>,
+    @InjectRepository(SubscriptionPlanEntity)
+    private readonly repository: Repository<SubscriptionPlanEntity>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(StoreConfig)
+    private readonly storeConfigRepository: Repository<StoreConfig>,
   ) {}
 
   async findAll(activeOnly = false) {
@@ -48,13 +51,13 @@ export class SubscriptionsService {
     return this.userRepository.save(user);
   }
 
-  async create(data: Partial<SubscriptionPlan>) {
+  async create(data: Partial<SubscriptionPlanEntity>) {
 // ... rest of the service
     const plan = this.repository.create(data);
     return this.repository.save(plan);
   }
 
-  async update(id: string, data: Partial<SubscriptionPlan>) {
+  async update(id: string, data: Partial<SubscriptionPlanEntity>) {
     await this.findOne(id);
     await this.repository.update(id, data);
     return this.findOne(id);
@@ -66,12 +69,10 @@ export class SubscriptionsService {
   }
 
   async seed() {
-    const count = await this.repository.count();
-    if (count > 0) return;
-
     const defaultPlans = [
       {
         name: 'Kiosque (Indépendant)',
+        code: 'starter',
         price: 0,
         description: 'Pour les micro-entrepreneurs qui débutent.',
         features: [
@@ -83,10 +84,18 @@ export class SubscriptionsService {
         ],
         icon: 'Building2',
         badge: 'Gratuit',
-        order: 1
+        order: 1,
+        maxProducts: 50,
+        maxUsers: 1,
+        maxOrdersPerMonth: 100,
+        maxWarehouses: 1,
+        hasPos: true,
+        hasChat: false,
+        hasAnalytics: false
       },
       {
         name: 'Boutique (Croissance)',
+        code: 'pro',
         price: 7500,
         description: 'Le choix préféré des boutiques physiques.',
         features: [
@@ -100,10 +109,18 @@ export class SubscriptionsService {
         icon: 'Building',
         isPopular: true,
         badge: 'Populaire',
-        order: 2
+        order: 2,
+        maxProducts: 1000,
+        maxUsers: 3,
+        maxOrdersPerMonth: 5000,
+        maxWarehouses: 2,
+        hasPos: true,
+        hasChat: true,
+        hasAnalytics: true
       },
       {
         name: 'Business (Elite)',
+        code: 'business',
         price: 25000,
         description: 'Pour les entreprises multi-dépôts.',
         features: [
@@ -116,10 +133,18 @@ export class SubscriptionsService {
         ],
         icon: 'Rocket',
         badge: 'Conseillé',
-        order: 3
+        order: 3,
+        maxProducts: -1, // -1 for unlimited
+        maxUsers: 10,
+        maxOrdersPerMonth: -1,
+        maxWarehouses: 5,
+        hasPos: true,
+        hasChat: true,
+        hasAnalytics: true
       },
       {
         name: 'Corporate (SaaS Cloud)',
+        code: 'enterprise',
         price: 75000,
         description: 'Solution complète pour la gestion multi-pays et SaaS complexe.',
         features: [
@@ -132,12 +157,87 @@ export class SubscriptionsService {
         ],
         icon: 'Crown',
         badge: 'Sur-mesure',
-        order: 4
+        order: 4,
+        maxProducts: -1,
+        maxUsers: -1,
+        maxOrdersPerMonth: -1,
+        maxWarehouses: -1,
+        hasPos: true,
+        hasChat: true,
+        hasAnalytics: true
       }
     ];
 
     for (const p of defaultPlans) {
-      await this.create(p);
+      const existing = await this.repository.findOne({ 
+        where: [{ code: p.code }, { name: p.name }] 
+      });
+
+      if (existing) {
+        await this.repository.update(existing.id, p);
+      } else {
+        await this.create(p);
+      }
     }
+  }
+
+  // ============ STATISTIQUES SUPERADMIN ============
+
+  async getAdminStats() {
+    // 1. Distribution des plans
+    const planDistribution = await this.storeConfigRepository
+      .createQueryBuilder('config')
+      .select('config.subscriptionPlan', 'plan')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('config.subscriptionPlan')
+      .getRawMany();
+
+    // 2. Statut des abonnements
+    const statusDistribution = await this.storeConfigRepository
+      .createQueryBuilder('config')
+      .select('config.subscriptionStatus', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('config.subscriptionStatus')
+      .getRawMany();
+
+    // 3. Dernières inscriptions / changements de plan
+    const recentSubscribers = await this.storeConfigRepository.find({
+      where: { vendorId: Not(IsNull()) },
+      relations: ['vendor'],
+      order: { updatedAt: 'DESC' },
+      take: 10,
+    });
+
+    // 4. Revenus mensuels estimés
+    const plans = await this.repository.find();
+    let estimatedMonthlyRevenue = 0;
+    
+    planDistribution.forEach(dist => {
+      const plan = plans.find(p => p.code === dist.plan);
+      if (plan && plan.price) {
+        estimatedMonthlyRevenue += Number(plan.price) * Number(dist.count);
+      }
+    });
+
+    return {
+      planDistribution: planDistribution.map(d => ({ 
+        plan: d.plan, 
+        count: Number(d.count) 
+      })),
+      statusDistribution: statusDistribution.map(d => ({ 
+        status: d.status, 
+        count: Number(d.count) 
+      })),
+      recentSubscribers: recentSubscribers.map(s => ({
+        id: s.id,
+        vendorId: s.vendorId,
+        vendorName: s.vendor?.name || 'Inconnu',
+        plan: s.subscriptionPlan,
+        status: s.subscriptionStatus,
+        updatedAt: s.updatedAt,
+      })),
+      estimatedMonthlyRevenue,
+      totalVendors: await this.storeConfigRepository.count(),
+    };
   }
 }

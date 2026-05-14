@@ -57,6 +57,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 @Entity('categories')
 export class Category {
@@ -93,6 +94,13 @@ export class Category {
 
   @Column({ type: 'jsonb', nullable: true })
   customAttributes: any[];
+
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
 
   @OneToMany(() => Product, (product) => product.category)

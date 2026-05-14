@@ -6,32 +6,40 @@ import { Repository, LessThanOrEqual, MoreThanOrEqual, IsNull, Brackets } from '
 import { Banner } from './entities/banner.entity';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class BannersService {
+export class BannersService extends AbstractTenantService<Banner> {
   constructor(
     @InjectRepository(Banner)
     private readonly bannerRepository: Repository<Banner>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(bannerRepository, tenantService, 'Banner');
+  }
 
   async create(createBannerDto: CreateBannerDto): Promise<Banner> {
-    const banner = this.bannerRepository.create(createBannerDto);
-    const saved = await this.bannerRepository.save(banner);
+    const banner = this.repo.create({
+      ...createBannerDto,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    const saved = await this.repo.save(banner);
     await (this.cacheManager as any).clear();
     return saved;
   }
 
   async findAll(): Promise<Banner[]> {
-    return this.bannerRepository.find({
-      order: { priority: 'ASC', createdAt: 'DESC' },
+    return this.repo.find({
+      order: { priority: 'ASC', createdAt: 'DESC' } as any,
     });
   }
 
   async getActive(position?: string): Promise<Banner[]> {
     const today = new Date().toISOString().split('T')[0];
     
-    const query = this.bannerRepository.createQueryBuilder('banner')
+    const query = this.repo.createQueryBuilder('banner')
       .where('banner.isActive = :isActive', { isActive: true })
       .andWhere(new Brackets(qb => {
         qb.where('banner.startDate IS NULL')
@@ -52,31 +60,26 @@ export class BannersService {
   }
 
   async findOne(id: string): Promise<Banner> {
-    const banner = await this.bannerRepository.findOne({ where: { id } });
-    if (!banner) {
-      throw new NotFoundException(`Bannière avec l'ID ${id} introuvable`);
-    }
-    return banner;
+    return super.findOne(id);
   }
 
   async update(id: string, updateBannerDto: UpdateBannerDto): Promise<Banner> {
     const banner = await this.findOne(id);
     Object.assign(banner, updateBannerDto);
-    const saved = await this.bannerRepository.save(banner);
+    const saved = await this.repo.save(banner);
     await (this.cacheManager as any).clear();
     return saved;
   }
 
   async remove(id: string): Promise<void> {
-    const banner = await this.findOne(id);
-    await this.bannerRepository.remove(banner);
+    await super.remove(id);
     await (this.cacheManager as any).clear();
   }
 
   async toggleActive(id: string): Promise<Banner> {
     const banner = await this.findOne(id);
     banner.isActive = !banner.isActive;
-    const saved = await this.bannerRepository.save(banner);
+    const saved = await this.repo.save(banner);
     await (this.cacheManager as any).clear();
     return saved;
   }

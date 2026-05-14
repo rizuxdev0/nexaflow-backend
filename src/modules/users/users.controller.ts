@@ -30,6 +30,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { User } from './entities/user.entity';
+import { UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { QuotaGuard, CheckQuota } from '../../common/guards/quota.guard';
 
 @ApiTags('users')
 @Controller('users')
@@ -40,9 +45,12 @@ export class UsersController {
   @Post()
   @Roles('super_admin', 'admin')
   @Permissions('users.create')
+  @UseGuards(QuotaGuard)
+  @CheckQuota('users')
   @ApiOperation({ summary: 'Créer un nouvel utilisateur (admin)' })
   @ApiResponse({ status: 201, description: 'Utilisateur créé' })
   @ApiResponse({ status: 409, description: 'Email déjà utilisé' })
+  @ApiResponse({ status: 403, description: 'Quota utilisateurs atteint pour votre plan' })
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createUserDto: CreateUserDto): Promise<UserResponseDto> {
     const user = await this.usersService.create(createUserDto);
