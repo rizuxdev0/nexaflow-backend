@@ -514,7 +514,12 @@ export class OrdersService extends AbstractTenantService<Order> {
     const [data, total] = await qb.getManyAndCount();
     return PaginatedResponseBuilder.build(data, total, page, pageSize);
   }
-
+  async getStats(
+    status?: OrderStatus,
+    paymentStatus?: PaymentStatus,
+    paymentMethod?: string,
+    source?: string,
+    customerId?: string,
     userId?: string,
     search?: string,
     dateFrom?: Date,
@@ -562,19 +567,7 @@ export class OrdersService extends AbstractTenantService<Order> {
     };
   }
 
-  async findOne(id: string): Promise<Order> {
-    const vendorId = this.tenantService.getVendorId();
-    const order = await this.ordersRepository.findOne({
-      where: { id, vendorId: vendorId || undefined },
-      relations: ['items', 'customer', 'user', 'session', 'items.product'],
-    });
 
-    if (!order) {
-      throw new NotFoundException(`Commande avec l'ID ${id} non trouvée`);
-    }
-
-    return order;
-  }
 
   async findRecent(limit: number = 10): Promise<Order[]> {
     const vendorId = this.tenantService.getVendorId();
@@ -703,22 +696,7 @@ export class OrdersService extends AbstractTenantService<Order> {
     return super.findOne(id, ['items', 'items.product', 'customer', 'user', 'session']);
   }
 
-  async updateStatus(id: string, status: OrderStatus, userId?: string): Promise<Order> {
-    const order = await this.findOne(id);
-    const oldStatus = order.status;
-    order.status = status;
-    
-    if (!order.statusHistory) order.statusHistory = [];
-    order.statusHistory.push({ status, timestamp: new Date(), userId });
 
-    const savedOrder = await this.repo.save(order);
-
-    if (status === OrderStatus.COMPLETED && oldStatus !== OrderStatus.COMPLETED) {
-      await this.finalizeVendorCommissions(order.id);
-    }
-
-    return savedOrder;
-  }
 
   async updatePaymentStatus(id: string, paymentStatus: PaymentStatus): Promise<Order> {
     const order = await this.findOne(id);

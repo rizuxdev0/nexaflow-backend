@@ -20,7 +20,7 @@ export class AuditController {
 
   @Get()
   @Roles('admin', 'super_admin') // Only admins can see the full log
-  @Permissions('reports.read')
+  @Permissions('activities.read')
   @ApiOperation({ summary: "Liste paginée des logs d'audit" })
   @ApiResponse({ status: 200, description: 'Liste des logs' })
   async findAll(
@@ -38,7 +38,7 @@ export class AuditController {
 
   @Get('stats')
   @Roles('admin', 'super_admin')
-  @Permissions('reports.read')
+  @Permissions('activities.read')
   @ApiOperation({ summary: "Statistiques des logs d'audit" })
   @ApiResponse({ status: 200, description: 'Statistiques' })
   async getStats() {

@@ -1,13 +1,21 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Vendor, VendorStatus } from './entities/vendor.entity';
+import { User } from '../users/entities/user.entity';
+import { Role } from '../roles/entities/role.entity';
 
 @Injectable()
 export class VendorsService {
+  private readonly logger = new Logger(VendorsService.name);
+
   constructor(
     @InjectRepository(Vendor)
     private readonly vendorRepository: Repository<Vendor>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
   ) {}
 
   async findAll(page = 1, pageSize = 20, status?: string, search?: string) {
@@ -120,7 +128,53 @@ export class VendorsService {
     if (status === VendorStatus.ACTIVE && !vendor.verifiedAt) {
       vendor.verifiedAt = new Date();
     }
-    return await this.vendorRepository.save(vendor);
+
+    const savedVendor = await this.vendorRepository.save(vendor);
+
+    // ─── Assign or revoke vendor role automatically ───
+    if (vendor.userId) {
+      await this.syncUserVendorRole(vendor.userId, status);
+    }
+
+    return savedVendor;
+  }
+
+  /**
+   * Syncs the user's role based on vendor status:
+   * - ACTIVE → assign 'vendor' role
+   * - SUSPENDED / REJECTED → revert to 'customer' role
+   */
+  private async syncUserVendorRole(userId: string, status: VendorStatus): Promise<void> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: ['role'],
+      });
+
+      if (!user) {
+        this.logger.warn(`syncUserVendorRole: User ${userId} not found`);
+        return;
+      }
+
+      const targetRoleName = status === VendorStatus.ACTIVE ? 'vendor' : 'customer';
+
+      const targetRole = await this.roleRepository.findOne({
+        where: { name: targetRoleName, isSystem: true },
+      });
+
+      if (!targetRole) {
+        this.logger.warn(`syncUserVendorRole: Role '${targetRoleName}' not found in DB. Run seedDefaultRoles first.`);
+        return;
+      }
+
+      user.roleId = targetRole.id;
+      user.role = targetRole;
+      await this.userRepository.save(user);
+
+      this.logger.log(`User ${userId} role updated to '${targetRoleName}' (vendor status: ${status})`);
+    } catch (err) {
+      this.logger.error(`syncUserVendorRole failed for user ${userId}:`, err);
+    }
   }
 
   async create(data: any) {

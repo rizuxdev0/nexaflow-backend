@@ -13,39 +13,25 @@ import { UpdateRegisterDto } from './dto/update-register.dto';
 import { CashSessionsService } from '../cash-sessions/cash-sessions.service';
 import { CashSession } from '../cash-sessions/entities/cash-session.entity';
 import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class RegistersService implements OnModuleInit {
+export class RegistersService extends AbstractTenantService<Register> {
   constructor(
     @InjectRepository(Register)
-    private registersRepository: Repository<Register>,
-    private cashSessionsService: CashSessionsService,
-    private tenantService: TenantService,
-  ) {}
-
-  async onModuleInit() {
-    await this.seedRegisters();
-  }
-
-  private async seedRegisters() {
-    const count = await this.registersRepository.count();
-    if (count === 0) {
-      const defaultRegister = this.registersRepository.create({
-        name: 'Caisse Principale',
-        code: 'C-PRINCIPAL',
-        location: 'Comptoir Central',
-        isMain: true,
-        isActive: true,
-      });
-      await this.registersRepository.save(defaultRegister);
-    }
+    private readonly registersRepository: Repository<Register>,
+    private readonly cashSessionsService: CashSessionsService,
+    tenantService: TenantService,
+  ) {
+    super(registersRepository, tenantService, 'Register');
   }
 
   async create(createRegisterDto: CreateRegisterDto): Promise<Register> {
     const vendorId = this.tenantService.getVendorId();
+    
     // Vérifier si le code existe déjà
-    const existingCode = await this.registersRepository.findOne({
-      where: { code: createRegisterDto.code, vendorId: vendorId || undefined },
+    const existingCode = await this.repo.findOne({
+      where: { code: createRegisterDto.code },
     });
 
     if (existingCode) {
@@ -56,28 +42,27 @@ export class RegistersService implements OnModuleInit {
 
     // Si c'est une caisse principale, retirer le flag des autres
     if (createRegisterDto.isMain) {
-      await this.registersRepository.update(
-        { isMain: true, vendorId: vendorId || undefined },
+      await this.repo.update(
+        { isMain: true },
         { isMain: false },
       );
     }
 
-    const register = this.registersRepository.create({
+    const register = this.repo.create({
       ...createRegisterDto,
-      vendorId: vendorId || undefined
+      vendorId: vendorId || (createRegisterDto as any).vendorId || undefined
     });
-    return await this.registersRepository.save(register);
+    return await this.repo.save(register);
   }
 
   async findAll(isActive?: boolean): Promise<Register[]> {
-    const vendorId = this.tenantService.getVendorId();
-    const where: FindOptionsWhere<Register> = { vendorId: vendorId || undefined };
+    const where: FindOptionsWhere<Register> = {};
 
     if (isActive !== undefined) {
       where.isActive = isActive;
     }
 
-    const registers = await this.registersRepository.find({
+    const registers = await this.repo.find({
       where,
       order: { isMain: 'DESC', name: 'ASC' },
     });
@@ -102,9 +87,8 @@ export class RegistersService implements OnModuleInit {
   }
 
   async findOne(id: string): Promise<Register> {
-    const vendorId = this.tenantService.getVendorId();
-    const register = await this.registersRepository.findOne({
-      where: { id, vendorId: vendorId || undefined },
+    const register = await this.repo.findOne({
+      where: { id },
       relations: ['sessions'],
     });
 
@@ -126,9 +110,8 @@ export class RegistersService implements OnModuleInit {
   }
 
   async findByCode(code: string): Promise<Register> {
-    const vendorId = this.tenantService.getVendorId();
-    const register = await this.registersRepository.findOne({
-      where: { code, vendorId: vendorId || undefined },
+    const register = await this.repo.findOne({
+      where: { code },
     });
 
     if (!register) {
@@ -139,9 +122,8 @@ export class RegistersService implements OnModuleInit {
   }
 
   async getMainRegister(): Promise<Register> {
-    const vendorId = this.tenantService.getVendorId();
-    const mainRegister = await this.registersRepository.findOne({
-      where: { isMain: true, isActive: true, vendorId: vendorId || undefined },
+    const mainRegister = await this.repo.findOne({
+      where: { isMain: true, isActive: true },
     });
 
     if (!mainRegister) {
@@ -155,13 +137,12 @@ export class RegistersService implements OnModuleInit {
     id: string,
     updateRegisterDto: UpdateRegisterDto,
   ): Promise<Register> {
-    const vendorId = this.tenantService.getVendorId();
     const register = await this.findOne(id);
 
     // Vérifier l'unicité du code si modifié
     if (updateRegisterDto.code && updateRegisterDto.code !== register.code) {
-      const existingCode = await this.registersRepository.findOne({
-        where: { code: updateRegisterDto.code, vendorId: vendorId || undefined },
+      const existingCode = await this.repo.findOne({
+        where: { code: updateRegisterDto.code },
       });
 
       if (existingCode && existingCode.id !== id) {
@@ -172,44 +153,39 @@ export class RegistersService implements OnModuleInit {
     }
 
     if (updateRegisterDto.isMain && !register.isMain) {
-      await this.registersRepository.update(
-        { isMain: true, vendorId: vendorId || undefined },
+      await this.repo.update(
+        { isMain: true },
         { isMain: false },
       );
     } else if (updateRegisterDto.isMain === false && register.isMain) {
-      // On ne peut pas "dé-principaliser" une caisse sans en désigner une autre
-      // On force la caisse à rester principale si elle l'était
       updateRegisterDto.isMain = true;
     }
 
     Object.assign(register, updateRegisterDto);
-    return await this.registersRepository.save(register);
+    return await this.repo.save(register);
   }
 
   async remove(id: string): Promise<void> {
     const register = await this.findOne(id);
 
-    // Empêcher la suppression de la caisse principale
     if (register.isMain) {
       throw new BadRequestException(
         'Impossible de supprimer la caisse principale',
       );
     }
 
-    // Vérifier si des sessions existent
     if (register.sessions && register.sessions.length > 0) {
       throw new BadRequestException(
         `Impossible de supprimer la caisse car elle a ${register.sessions.length} session(s) associée(s)`,
       );
     }
 
-    await this.registersRepository.remove(register);
+    await this.repo.remove(register);
   }
 
   async toggleStatus(id: string): Promise<Register> {
     const register = await this.findOne(id);
 
-    // Empêcher la désactivation de la caisse principale
     if (register.isMain && register.isActive) {
       throw new BadRequestException(
         'Impossible de désactiver la caisse principale',
@@ -217,12 +193,12 @@ export class RegistersService implements OnModuleInit {
     }
 
     register.isActive = !register.isActive;
-    return await this.registersRepository.save(register);
+    return await this.repo.save(register);
   }
 
   async assignUser(id: string, userId: string): Promise<Register> {
     const register = await this.findOne(id);
     register.assignedUserId = userId;
-    return await this.registersRepository.save(register);
+    return await this.repo.save(register);
   }
 }

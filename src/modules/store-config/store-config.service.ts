@@ -6,6 +6,7 @@ import { Repository, IsNull } from 'typeorm';
 import { StoreConfig } from './entities/store-config.entity';
 import { UpdateStoreConfigDto } from './dto/update-store-config.dto';
 import { PLAN_QUOTAS, SubscriptionPlan } from './subscription-plans';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class StoreConfigService {
@@ -32,6 +33,7 @@ export class StoreConfigService {
     @InjectRepository(StoreConfig)
     private readonly configRepository: Repository<StoreConfig>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly tenantService: TenantService,
   ) {}
 
   async getPlanQuotas(plan: SubscriptionPlan) {
@@ -48,7 +50,8 @@ export class StoreConfigService {
     return raw.filter(p => p && typeof p === 'object' && !Array.isArray(p));
   }
 
-  async get(vendorId?: string): Promise<StoreConfig> {
+  async get(overrideVendorId?: string): Promise<StoreConfig> {
+    const vendorId = overrideVendorId || this.tenantService.getVendorId();
     const cacheKey = `store_config_${vendorId || 'default'}`;
     const cached = await this.cacheManager.get<StoreConfig>(cacheKey);
     if (cached) return cached;
@@ -238,8 +241,9 @@ export class StoreConfigService {
     return config;
   }
 
-  async update(updateStoreConfigDto: UpdateStoreConfigDto, vendorId?: string): Promise<StoreConfig> {
-    const config = await this.get(vendorId);
+  async update(updateStoreConfigDto: UpdateStoreConfigDto, overrideVendorId?: string): Promise<StoreConfig> {
+    const vendorId = overrideVendorId || this.tenantService.getVendorId();
+    const config = await this.get(vendorId || undefined);
     const cacheKey = `store_config_${vendorId || 'default'}`;
     
     if (updateStoreConfigDto.identity) {
@@ -254,13 +258,6 @@ export class StoreConfigService {
     if (updateStoreConfigDto.partners !== undefined) {
       let partnersPayload = updateStoreConfigDto.partners;
       
-      // LOG TRÈS PRÉCIS POUR DÉBOGUER
-      console.log('--- PARTNERS UPDATE DEBUG ---');
-      console.log('Raw Payload Type:', typeof partnersPayload);
-      console.log('Is Array:', Array.isArray(partnersPayload));
-      console.log('Content JSON:', JSON.stringify(partnersPayload));
-
-      // Sécurité : vérifier si on a reçu une chaîne JSON ou des objets imbriqués
       if (typeof partnersPayload === 'string') {
         try { partnersPayload = JSON.parse(partnersPayload); } catch (e) {}
       }
@@ -273,19 +270,16 @@ export class StoreConfigService {
       }
 
       config.partners = this.sanitizePartners(Array.isArray(partnersPayload) ? partnersPayload : []);
-      console.log('Final partners to save count:', config.partners.length);
-      console.log('-----------------------------');
     }
     if (updateStoreConfigDto.features) {
       const defaultFeatures = this.DEFAULT_FEATURES;
 
-      // Robust merge: prioritize static data from defaults, take 'enabled' from DTO
       config.features = updateStoreConfigDto.features.map(f => {
         const def = defaultFeatures.find(d => d.id === f.id);
         if (def) {
           return { ...def, enabled: !!f.enabled };
         }
-        return f; // Keep as is if not in defaults (shouldn't happen)
+        return f; 
       });
     }
     if (updateStoreConfigDto.appearance) {
@@ -295,8 +289,6 @@ export class StoreConfigService {
       config.security = { ...config.security, ...updateStoreConfigDto.security };
     }
 
-    // 👈 FORCED SYNC: Use a more direct update method with explicit casts
-    // We use raw SQL with ::jsonb to ensure Postgres correctly interprets the strings
     const debug = {
       received: !!updateStoreConfigDto.partners,
       count: updateStoreConfigDto.partners?.length || 0,
@@ -310,4 +302,3 @@ export class StoreConfigService {
     return { ...config, _debug: debug } as any;
   }
 }
-  

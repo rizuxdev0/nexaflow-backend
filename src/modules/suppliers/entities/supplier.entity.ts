@@ -19,7 +19,7 @@ export class Supplier {
   @Column({ length: 200 })
   name: string;
 
-  @Column({ unique: true, length: 50 })
+  @Column({ length: 50 })
   code: string;
 
   @Column({ length: 100 })

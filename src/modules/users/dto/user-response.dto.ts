@@ -11,6 +11,25 @@ class RoleInfoDto {
   label: string;
 }
 
+class VendorInfoDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  name: string;
+}
+
+class BranchInfoDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  city: string;
+}
+
 export class UserResponseDto {
   @ApiProperty()
   id: string;
@@ -50,6 +69,12 @@ export class UserResponseDto {
 
   @ApiProperty()
   role: RoleInfoDto;
+
+  @ApiPropertyOptional()
+  vendor?: VendorInfoDto;
+
+  @ApiPropertyOptional()
+  branch?: BranchInfoDto;
 
   @ApiProperty()
   createdAt: Date;

@@ -18,57 +18,29 @@ import {
   PaginatedResponseBuilder,
 } from '../../common/interfaces/paginated-response.interface';
 import { ConfigService } from '@nestjs/config';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
-    private usersRepository: Repository<User>,
+    private readonly usersRepository: Repository<User>,
     @InjectRepository(Role)
-    private rolesRepository: Repository<Role>,
+    private readonly rolesRepository: Repository<Role>,
     @InjectRepository(Permission)
-    private permissionsRepository: Repository<Permission>,
-    private configService: ConfigService,
+    private readonly permissionsRepository: Repository<Permission>,
+    private readonly configService: ConfigService,
+    private readonly tenantService: TenantService,
   ) {}
+
+  private get userRepo() { return this.tenantService.tenantRepo(this.usersRepository); }
+  private get roleRepo() { return this.tenantService.tenantRepo(this.rolesRepository); }
+  private get permissionRepo() { return this.tenantService.tenantRepo(this.permissionsRepository); }
 
   // ============ CRUD PRINCIPAL ============
 
-  // async create(createUserDto: CreateUserDto): Promise<User> {
-  //   // Vérifier si l'email existe déjà
-  //   const existingUser = await this.usersRepository.findOne({
-  //     where: { email: createUserDto.email },
-  //   });
-
-  //   if (existingUser) {
-  //     throw new ConflictException(
-  //       `Un utilisateur avec l'email ${createUserDto.email} existe déjà`,
-  //     );
-  //   }
-
-  //   // Vérifier que le rôle existe
-  //   const role = await this.rolesRepository.findOne({
-  //     where: { id: createUserDto.roleId },
-  //   });
-
-  //   if (!role) {
-  //     throw new NotFoundException(
-  //       `Rôle avec l'ID ${createUserDto.roleId} non trouvé`,
-  //     );
-  //   }
-
-  //   // Hasher le mot de passe
-  //   const hashedPassword = await bcrypt.hash(createUserDto.password, 12);
-
-  //   const user = this.usersRepository.create({
-  //     ...createUserDto,
-  //     password: hashedPassword,
-  //   });
-
-  //   return await this.usersRepository.save(user);
-  // }
-  // Dans users.service.ts - Modifier la méthode create
   async create(createUserDto: CreateUserDto & Partial<User>): Promise<User> {
-    // Vérifier si l'email existe déjà
+    // Vérifier si l'email existe déjà (Global check because of unique constraint)
     const existingUser = await this.usersRepository.findOne({
       where: { email: createUserDto.email },
     });
@@ -80,7 +52,7 @@ export class UsersService {
     }
 
     // Vérifier que le rôle existe
-    const role = await this.rolesRepository.findOne({
+    const role = await this.roleRepo.findOne({
       where: { id: createUserDto.roleId },
     });
 
@@ -94,7 +66,7 @@ export class UsersService {
       ...createUserDto,
     };
 
-    // Hasher le mot de passe s'il n'est pas déjà hashé
+    // Hasher le mot de passe
     if (userData.password && !userData.password.startsWith('$2')) {
       const rounds = Number(this.configService.get('BCRYPT_ROUNDS', 12));
       userData.password = await bcrypt.hash(userData.password, rounds);
@@ -104,16 +76,17 @@ export class UsersService {
     const extraPermissions: Permission[] = [];
     if (createUserDto.extraPermissionIds && createUserDto.extraPermissionIds.length > 0) {
       for (const permId of createUserDto.extraPermissionIds) {
-        const perm = await this.permissionsRepository.findOne({ where: { id: permId } });
+        const perm = await this.permissionRepo.findOne({ where: { id: permId } });
         if (perm) extraPermissions.push(perm);
       }
     }
 
-    const user = this.usersRepository.create({
+    const user = this.userRepo.create({
       ...userData,
       extraPermissions,
+      vendorId: this.tenantService.getVendorId() || (createUserDto as any).vendorId || undefined,
     });
-    return await this.usersRepository.save(user);
+    return await this.userRepo.save(user);
   }
 
   async findAll(
@@ -128,7 +101,6 @@ export class UsersService {
 
     if (search) {
       where.firstName = Like(`%${search}%`);
-      // Note: Pour une recherche plus poussée, utiliser QueryBuilder
     }
 
     if (roleId) {
@@ -143,9 +115,15 @@ export class UsersService {
       where.isActive = isActive;
     }
 
-    const [data, total] = await this.usersRepository.findAndCount({
+    // Sécurité supplémentaire : Forcer le vendorId du contexte s'il existe
+    const contextVendorId = this.tenantService.getVendorId();
+    if (contextVendorId) {
+      where.vendorId = contextVendorId;
+    }
+
+    const [data, total] = await this.userRepo.findAndCount({
       where,
-      relations: ['role', 'extraPermissions'],
+      relations: ['role', 'extraPermissions', 'vendor', 'branch'],
       skip: (page - 1) * pageSize,
       take: pageSize,
       order: { createdAt: 'DESC' },
@@ -168,16 +146,22 @@ export class UsersService {
   ): Promise<User> {
     const relations: string[] = [];
     if (options?.withRoleAndPermissions) {
-      relations.push('role', 'role.permissions', 'extraPermissions');
+      relations.push('role', 'role.permissions', 'extraPermissions', 'vendor', 'branch');
+    } else {
+      relations.push('vendor', 'branch');
     }
 
-    const user = await this.usersRepository.findOne({
+    const user = await this.userRepo.findOne({
       where: { id },
       relations,
     });
 
     if (!user) {
       throw new NotFoundException(`Utilisateur avec l'ID ${id} non trouvé`);
+    }
+
+    if (user.role?.name === 'super_admin' && options?.withRoleAndPermissions) {
+      user.role.permissions = await this.permissionsRepository.find();
     }
 
     return user;
@@ -192,6 +176,7 @@ export class UsersService {
       relations.push('role', 'role.permissions', 'extraPermissions');
     }
 
+    // Email is global, so we use the raw repository to find the user for login
     const user = await this.usersRepository.findOne({
       where: { email },
       relations,
@@ -203,6 +188,10 @@ export class UsersService {
       );
     }
 
+    if (user.role?.name === 'super_admin' && options?.withRoleAndPermissions) {
+      user.role.permissions = await this.permissionsRepository.find();
+    }
+
     return user;
   }
 
@@ -212,7 +201,7 @@ export class UsersService {
   ): Promise<UserResponseDto> {
     const user = await this.findById(id);
 
-    // Vérifier l'unicité de l'email si modifié
+    // Vérifier l'unicité de l'email si modifié (Global check)
     if (updateUserDto.email && updateUserDto.email !== user.email) {
       const existingUser = await this.usersRepository.findOne({
         where: { email: updateUserDto.email },
@@ -224,9 +213,9 @@ export class UsersService {
       }
     }
 
-    // Vérifier que le rôle existe si modifié
+    // Vérifier que le rôle existe
     if (updateUserDto.roleId && updateUserDto.roleId !== user.roleId) {
-      const role = await this.rolesRepository.findOne({
+      const role = await this.roleRepo.findOne({
         where: { id: updateUserDto.roleId },
       });
       if (!role) {
@@ -236,18 +225,16 @@ export class UsersService {
       }
     }
 
-    // Si le mot de passe est fourni, le hasher
     if (updateUserDto.password && !updateUserDto.password.startsWith('$2')) {
       const rounds = Number(this.configService.get('BCRYPT_ROUNDS', 12));
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, rounds);
     }
 
-    // Gérer les permissions supplémentaires si fournies
     if (updateUserDto.extraPermissionIds) {
       const extraPermissions: Permission[] = [];
       if (updateUserDto.extraPermissionIds.length > 0) {
         for (const permId of updateUserDto.extraPermissionIds) {
-          const perm = await this.permissionsRepository.findOne({ where: { id: permId } });
+          const perm = await this.permissionRepo.findOne({ where: { id: permId } });
           if (perm) extraPermissions.push(perm);
         }
       }
@@ -255,16 +242,15 @@ export class UsersService {
     }
 
     Object.assign(user, updateUserDto);
-    const updatedUser = await this.usersRepository.save(user);
+    const updatedUser = await this.userRepo.save(user);
     return this.removeSensitiveData(updatedUser);
   }
 
   async remove(id: string): Promise<void> {
     const user = await this.findById(id);
 
-    // Empêcher la suppression du dernier super_admin
     if (user.role?.name === 'super_admin') {
-      const superAdminCount = await this.usersRepository.count({
+      const superAdminCount = await this.userRepo.count({
         where: { roleId: user.roleId },
       });
       if (superAdminCount <= 1) {
@@ -274,15 +260,14 @@ export class UsersService {
       }
     }
 
-    await this.usersRepository.remove(user);
+    await this.userRepo.remove(user);
   }
 
   async toggleStatus(id: string): Promise<UserResponseDto> {
     const user = await this.findById(id);
 
-    // Empêcher la désactivation du dernier super_admin
     if (user.role?.name === 'super_admin' && user.isActive) {
-      const superAdminCount = await this.usersRepository.count({
+      const superAdminCount = await this.userRepo.count({
         where: { roleId: user.roleId, isActive: true },
       });
       if (superAdminCount <= 1) {
@@ -293,7 +278,7 @@ export class UsersService {
     }
 
     user.isActive = !user.isActive;
-    const updatedUser = await this.usersRepository.save(user);
+    const updatedUser = await this.userRepo.save(user);
     return this.removeSensitiveData(updatedUser);
   }
 
@@ -313,13 +298,15 @@ export class UsersService {
   }
 
   async findByRefreshToken(refreshToken: string): Promise<User | null> {
-    // Note: On ne peut pas rechercher par hash directement, donc on doit itérer
-    // Dans un cas réel, stocker le hash et comparer
     const users = await this.usersRepository.find({
-      where: { refreshToken: refreshToken }, // À remplacer par une vraie recherche de hash
+      where: { refreshToken: refreshToken },
       relations: ['role', 'role.permissions', 'extraPermissions'],
     });
-    return users[0] || null;
+    const user = users[0] || null;
+    if (user && user.role?.name === 'super_admin') {
+      user.role.permissions = await this.permissionsRepository.find();
+    }
+    return user;
   }
 
   async setResetPasswordToken(
@@ -341,9 +328,8 @@ export class UsersService {
   }
 
   async findByResetPasswordToken(token: string): Promise<User | null> {
-    // Dans un cas réel, comparer les hashs
     const users = await this.usersRepository.find({
-      where: { resetPasswordToken: token }, // À remplacer par une vraie comparaison
+      where: { resetPasswordToken: token },
     });
     return users[0] || null;
   }
@@ -381,15 +367,23 @@ export class UsersService {
   }
 
   async getUsersByRole(roleId: string): Promise<User[]> {
-    return await this.usersRepository.find({
-      where: { roleId, isActive: true },
+    const where: any = { roleId, isActive: true };
+    const vendorId = this.tenantService.getVendorId();
+    if (vendorId) where.vendorId = vendorId;
+
+    return await this.userRepo.find({
+      where,
       order: { firstName: 'ASC' },
     });
   }
 
   async getActiveUsersCount(): Promise<number> {
-    return await this.usersRepository.count({
-      where: { isActive: true },
+    const where: any = { isActive: true };
+    const vendorId = this.tenantService.getVendorId();
+    if (vendorId) where.vendorId = vendorId;
+
+    return await this.userRepo.count({
+      where,
     });
   }
 
@@ -404,21 +398,11 @@ export class UsersService {
       ...safeUser
     } = user;
 
-    // Ajouter la propriété calculée fullName
     return {
       ...safeUser,
       fullName: `${user.firstName} ${user.lastName}`.trim(),
+      vendor: user.vendor ? { id: user.vendor.id, name: user.vendor.name } : undefined,
+      branch: user.branch ? { id: user.branch.id, name: user.branch.name, city: user.branch.city } : undefined,
     } as UserResponseDto;
   }
-  // private removeSensitiveData(user: User): UserResponseDto {
-  //   const {
-  //     password,
-  //     refreshToken,
-  //     resetPasswordToken,
-  //     resetPasswordExpires,
-  //     emailVerificationToken,
-  //     ...safeUser
-  //   } = user;
-  //   return safeUser as UserResponseDto;
-  // }
 }

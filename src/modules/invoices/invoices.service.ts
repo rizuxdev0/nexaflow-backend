@@ -132,7 +132,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, Like, FindOptionsWhere, EntityManager } from 'typeorm';
+import { Repository, Between, Like, FindOptionsWhere, EntityManager, ObjectLiteral } from 'typeorm';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
 import { Order } from '../orders/entities/order.entity';
 import { CreditNote } from './entities/credit-note.entity';
@@ -168,7 +168,7 @@ export class InvoicesService extends AbstractTenantService<Invoice> {
   private get creditNotesRepo() { return this.tenantRepo(this.creditNotesRepository); }
   private get configRepo() { return this.tenantRepo(this.configRepository); }
 
-  private getRepo<T>(baseRepo: Repository<T>, manager?: EntityManager): Repository<T> {
+  private getRepo<T extends ObjectLiteral>(baseRepo: Repository<T>, manager?: EntityManager): Repository<T> {
     const repo = manager ? manager.getRepository(baseRepo.target) : baseRepo;
     return this.tenantRepo(repo as Repository<T>);
   }
@@ -267,10 +267,12 @@ export class InvoicesService extends AbstractTenantService<Invoice> {
   }
 
   async getNumberingConfig(): Promise<InvoiceNumberingConfig> {
-    let config = await this.configRepository.findOne({ where: {} });
+    let config = await this.configRepo.findOne({ where: {} });
     if (!config) {
-      config = this.configRepository.create();
-      await this.configRepository.save(config);
+      config = this.configRepo.create({
+        vendorId: this.tenantService.getVendorId() || undefined,
+      });
+      await this.configRepo.save(config);
     }
     return config;
   }
@@ -278,7 +280,7 @@ export class InvoicesService extends AbstractTenantService<Invoice> {
   async updateNumberingConfig(data: Partial<InvoiceNumberingConfig>): Promise<InvoiceNumberingConfig> {
     let config = await this.getNumberingConfig();
     Object.assign(config, data);
-    return await this.configRepository.save(config);
+    return await this.configRepo.save(config);
   }
 
   // ============ LISTE PAGINÉE ============
@@ -314,7 +316,7 @@ export class InvoicesService extends AbstractTenantService<Invoice> {
         { orderNumber: Like(`%${search}%`) },
       ];
 
-      const [data, total] = await this.invoicesRepository.findAndCount({
+      const [data, total] = await this.repo.findAndCount({
         where: searchWhere,
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -334,7 +336,7 @@ export class InvoicesService extends AbstractTenantService<Invoice> {
       where.issuedAt = Between(new Date(startDate), new Date(endDate));
     }
 
-    const [data, total] = await this.invoicesRepository.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -368,7 +370,7 @@ export class InvoicesService extends AbstractTenantService<Invoice> {
   // ============ FACTURE PAR COMMANDE ============
 
   async findByOrderId(orderId: string): Promise<InvoiceResponseDto> {
-    const invoice = await this.invoicesRepository.findOne({
+    const invoice = await this.repo.findOne({
       where: { orderId },
       relations: ['order'],
     });

@@ -51,7 +51,7 @@ export class ChatController {
 
   @Get('active')
   @UseGuards(PermissionsGuard)
-  @Permissions('READ_CHAT')
+  @Permissions('chat.read')
   @ApiOperation({ summary: 'Get all active conversations' })
   async getActiveConversations() {
     return this.chatService.getActiveConversations();
@@ -66,7 +66,7 @@ export class ChatController {
 
   @Patch('conversations/:id/close')
   @UseGuards(PermissionsGuard)
-  @Permissions('CLOSE_CHAT')
+  @Permissions('chat.update')
   @ApiOperation({ summary: 'Close a conversation' })
   async closeConversation(@Param('id') id: string) {
     return this.chatService.closeConversation(id);

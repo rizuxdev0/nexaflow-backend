@@ -16,6 +16,11 @@ export class TenantInterceptor implements NestInterceptor {
     // On extrait le vendorId de l'utilisateur connecté ou du header X-Vendor-Id pour les accès publics
     const vendorId = user?.vendorId || request.headers['x-vendor-id'] || request.query['vendorId'] || null;
 
+    // DEBUG: Log tenant isolation context
+    const method = request.method;
+    const url = request.url;
+    console.log(`[TenantInterceptor] ${method} ${url} | user.id=${user?.id || 'NONE'} | user.vendorId=${user?.vendorId || 'NULL'} | resolved vendorId=${vendorId || 'NULL'}`);
+
     return new Observable((observer) => {
       tenantLocalStorage.run({ vendorId }, () => {
         next.handle().subscribe({

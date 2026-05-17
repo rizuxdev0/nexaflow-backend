@@ -10,10 +10,10 @@ import { StockMovementType } from '../stock/entities/stock-movement.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 import { TenantService } from '../../common/tenant/tenant.service';
-
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class PurchaseOrdersService {
+export class PurchaseOrdersService extends AbstractTenantService<PurchaseOrder> {
   constructor(
     @InjectRepository(PurchaseOrder)
     private readonly poRepository: Repository<PurchaseOrder>,
@@ -23,17 +23,26 @@ export class PurchaseOrdersService {
     private readonly productRepository: Repository<Product>,
     private readonly stockService: StockService,
     private readonly auditService: AuditService,
-    private readonly tenantService: TenantService,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(poRepository, tenantService, 'PurchaseOrder');
+  }
+
+  private get supplierRepo() {
+    return this.tenantService.tenantRepo(this.supplierRepository);
+  }
+
+  private get productRepo() {
+    return this.tenantService.tenantRepo(this.productRepository);
+  }
 
   async findAll(query: { page?: number; pageSize?: number; status?: string; supplierId?: string }) {
     const { page = 1, pageSize = 20, status, supplierId } = query;
-    const vendorId = this.tenantService.getVendorId();
-    const where: any = { vendorId: vendorId || undefined };
+    const where: any = {};
     if (status) where.status = status;
     if (supplierId) where.supplierId = supplierId;
 
-    const [data, total] = await this.poRepository.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -45,9 +54,8 @@ export class PurchaseOrdersService {
   }
 
   async findOne(id: string) {
-    const vendorId = this.tenantService.getVendorId();
-    const po = await this.poRepository.findOne({ 
-      where: { id, vendorId: vendorId || undefined },
+    const po = await this.repo.findOne({ 
+      where: { id },
       relations: ['supplier']
     });
     if (!po) throw new NotFoundException('Bon de commande non trouvé');
@@ -55,25 +63,23 @@ export class PurchaseOrdersService {
   }
 
   async create(dto: CreatePurchaseOrderDto) {
-    const vendorId = this.tenantService.getVendorId();
-    const supplier = await this.supplierRepository.findOne({ where: { id: dto.supplierId, vendorId: vendorId || undefined } });
+    const supplier = await this.supplierRepo.findOne({ where: { id: dto.supplierId } });
     if (!supplier) throw new NotFoundException('Fournisseur non trouvé');
 
     const poNumber = await this.generatePoNumber();
-    const po = this.poRepository.create({
+    const po = this.repo.create({
       ...dto,
       poNumber,
       status: PurchaseOrderStatus.DRAFT,
-      vendorId: vendorId || undefined,
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
 
-    const saved = await this.poRepository.save(po);
+    const saved = await this.repo.save(po);
 
     await this.auditService.log({
       userName: 'Admin',
       action: AuditAction.CREATE,
       resource: 'PurchaseOrder',
-
       resourceId: saved.id,
       details: `Création bon de commande ${saved.poNumber} auprès de ${supplier.name}`
     });
@@ -90,14 +96,13 @@ export class PurchaseOrdersService {
     }
 
     po.status = dto.status;
-    const saved = await this.poRepository.save(po);
+    const saved = await this.repo.save(po);
 
     await this.auditService.log({
       userId,
       userName: 'Admin',
       action: AuditAction.UPDATE,
       resource: 'PurchaseOrder',
-
       resourceId: saved.id,
       details: `Statut bon de commande ${saved.poNumber} : ${oldStatus} → ${saved.status}`
     });
@@ -123,7 +128,7 @@ export class PurchaseOrdersService {
     po.status = isFull ? PurchaseOrderStatus.RECEIVED : PurchaseOrderStatus.PARTIAL;
     po.receivedDate = new Date();
 
-    const saved = await this.poRepository.save(po);
+    const saved = await this.repo.save(po);
 
     // Stock update logic for each received item
     for (const dItem of dto.items) {
@@ -143,7 +148,6 @@ export class PurchaseOrdersService {
       userName: 'Admin',
       action: AuditAction.UPDATE,
       resource: 'PurchaseOrder',
-
       resourceId: saved.id,
       details: `Réception ${isFull ? 'totale' : 'partielle'} du bon de commande ${po.poNumber}`
     });
@@ -152,12 +156,8 @@ export class PurchaseOrdersService {
   }
 
   async getSuggestions(userId?: string) {
-    const vendorId = this.tenantService.getVendorId();
-    // 1. Identify products whose stock (current + pending) is below minStock
-    // We need to account for products already being ordered (status draft, sent, confirmed, partial)
-    const activePOs = await this.poRepository.createQueryBuilder('po')
+    const activePOs = await this.repo.createQueryBuilder('po')
       .where('po.status NOT IN (:...excluded)', { excluded: [PurchaseOrderStatus.RECEIVED, PurchaseOrderStatus.CANCELLED] })
-      .andWhere('po.vendorId = :vendorId', { vendorId: vendorId || null })
       .getMany();
 
     const pendingQuantities = new Map<string, number>();
@@ -169,33 +169,21 @@ export class PurchaseOrdersService {
       });
     });
 
-    // 2. Fetch all products to check stock levels
-    const allProducts = await this.productRepository.find({ 
-      where: { vendorId: vendorId || undefined },
+    const allProducts = await this.productRepo.find({ 
       relations: ['supplier'] 
     });
-    console.log(`[PO Suggestions] Analyzing ${allProducts.length} products...`);
     
-    // Filter products that actually need replenishment
     const productsToOrder = allProducts.filter(p => {
       const stockVal = Number(p.stock) || 0;
       const minStockVal = Number(p.minStock) || 0;
       const pending = pendingQuantities.get(p.id) || 0;
       const virtualStock = stockVal + pending;
 
-      const needsOrder = virtualStock <= minStockVal && !!p.supplierId;
-      
-      if (virtualStock <= minStockVal && !p.supplierId) {
-        console.warn(`[PO Suggestions] Product ${p.name} (${p.sku}) is below threshold (${virtualStock}/${minStockVal}) but has NO supplier.`);
-      }
-      return needsOrder;
+      return virtualStock <= minStockVal && !!p.supplierId;
     });
-
-    console.log(`[PO Suggestions] Found ${productsToOrder.length} products needing replenishment.`);
 
     if (productsToOrder.length === 0) return [];
 
-    // 3. Group by supplier
     const ordersBySupplier = new Map<string, { supplierId: string, supplierName: string, items: any[] }>();
     
     for (const p of productsToOrder) {
@@ -216,7 +204,6 @@ export class PurchaseOrdersService {
       const pending = pendingQuantities.get(p.id) || 0;
       const virtualStock = stockVal + pending;
       
-      // Calculate quantity: fill up to maxStock, ensure it's at least minStock * 2 to justify the PO
       const baseReplenish = maxStockVal - virtualStock;
       const orderQty = Math.max(baseReplenish, minStockVal * 2);
 
@@ -236,12 +223,11 @@ export class PurchaseOrdersService {
 
     const createdOrders: PurchaseOrder[] = [];
 
-    // 4. Create Draft Purchase Orders
     for (const group of Array.from(ordersBySupplier.values())) {
       if (group.items.length === 0) continue;
 
       const subtotal = group.items.reduce((acc, i) => acc + i.total, 0);
-      const taxTotal = Math.round(subtotal * 0.18); // Example fixed tax for now
+      const taxTotal = Math.round(subtotal * 0.18); 
       const total = subtotal + taxTotal;
 
       const po = await this.create({
@@ -250,7 +236,7 @@ export class PurchaseOrdersService {
         subtotal,
         taxTotal,
         total,
-        expectedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // J+7
+        expectedDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), 
         isAutoGenerated: true,
         notes: 'Généré automatiquement — Analyse intelligente du stock bas',
       });
@@ -261,10 +247,8 @@ export class PurchaseOrdersService {
   }
 
   private async generatePoNumber(): Promise<string> {
-    const vendorId = this.tenantService.getVendorId();
-    const date = new Date();
-    const prefix = `PO-${date.getFullYear()}${ (date.getMonth() + 1).toString().padStart(2, '0') }`;
-    const count = await this.poRepository.count({ where: { vendorId: vendorId || undefined } });
+    const prefix = `PO-${new Date().getFullYear()}${ (new Date().getMonth() + 1).toString().padStart(2, '0') }`;
+    const count = await this.repo.count();
     return `${prefix}-${(count + 1).toString().padStart(4, '0')}`;
   }
 }

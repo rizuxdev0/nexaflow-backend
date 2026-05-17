@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 
@@ -70,7 +70,7 @@ import { VendorsModule } from './modules/vendors/vendors.module';
 import { CustomerEventsModule } from './modules/customer-events/customer-events.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { TenantModule } from './common/tenant/tenant.module';
-import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
+import { TenantMiddleware } from './common/middleware/tenant.middleware';
 
 @Module({
   imports: [
@@ -207,10 +207,7 @@ import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor, // ← Ajouter l'intercepteur d'audit
     },
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: TenantInterceptor,
-    },
+
 
     // ============ GLOBAL FILTERS ============
     {
@@ -224,4 +221,8 @@ import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}

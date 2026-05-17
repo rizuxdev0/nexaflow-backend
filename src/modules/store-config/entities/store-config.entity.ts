@@ -1,6 +1,6 @@
 import { SubscriptionPlan } from '../subscription-plans';
 import { Vendor } from '../../vendors/entities/vendor.entity';
-import { ManyToOne, JoinColumn, PrimaryGeneratedColumn, Column, Entity, UpdateDateColumn } from 'typeorm';
+import { ManyToOne, JoinColumn, PrimaryGeneratedColumn, Column, Entity, UpdateDateColumn, OneToOne } from 'typeorm';
 
 @Entity('store_config')
 export class StoreConfig {

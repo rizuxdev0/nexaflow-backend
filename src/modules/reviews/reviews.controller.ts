@@ -59,6 +59,13 @@ export class ReviewsController {
     return this.reviewsService.getPending(+page || 1, +pageSize || 20);
   }
 
+  @Get()
+  @Roles('admin', 'manager')
+  @Permissions('reviews.read')
+  findAll(@Query('page') page: string, @Query('pageSize') pageSize: string) {
+    return this.reviewsService.findAll(+page || 1, +pageSize || 20);
+  }
+
   @Patch(':id/moderate')
   @Roles('admin', 'manager')
   @Permissions('reviews.update')

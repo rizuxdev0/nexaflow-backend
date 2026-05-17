@@ -238,7 +238,9 @@ export class AuthService implements OnModuleInit {
       email: dto.email,
       phone: dto.phone,
       address: dto.address,
-      country: dto.country || 'Sénégal',
+      city: dto['city'] || 'Lomé', // Fallback as city is NOT NULL in the database
+      country: dto.country || 'Togo',
+      contactPerson: `${dto.firstName} ${dto.lastName}`,
       status: VendorStatus.ACTIVE,
       userId: user.id, // Lien vers le propriétaire
     });
@@ -251,8 +253,8 @@ export class AuthService implements OnModuleInit {
       name: 'Succursale Principale',
       code: `BR-${vendor.id.slice(0, 4).toUpperCase()}`,
       address: dto.address,
-      city: 'Dakar',
-      country: dto.country || 'Sénégal',
+      city: 'Lomé',
+      country: dto.country || 'Togo',
       phone: dto.phone || '',
       email: dto.email,
       isMain: true,
@@ -480,6 +482,7 @@ export class AuthService implements OnModuleInit {
       sub: user.id,
       email: user.email,
       role: user.role?.name,
+      vendorId: user.vendorId || null,
     };
 
     // Récupérer la configuration de sécurité pour l'expiration du token

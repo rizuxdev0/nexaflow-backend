@@ -26,6 +26,7 @@ export class LoyaltyController {
 
   @Get('stats')
   @Roles('admin', 'manager')
+  @Permissions('loyalty.read')
   getStats() {
     return this.loyaltyService.getStats();
   }
@@ -64,6 +65,7 @@ export class LoyaltyController {
 
   @Get('transactions')
   @Roles('admin', 'manager', 'customer')
+  @Permissions('loyalty.read')
   async getTransactions(
     @Query('page') page: string, 
     @Query('pageSize') pageSize: string,

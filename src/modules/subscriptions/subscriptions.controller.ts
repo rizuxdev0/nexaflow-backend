@@ -12,11 +12,19 @@ export class SubscriptionsController {
   constructor(private readonly service: SubscriptionsService) {}
 
   @ApiBearerAuth()
-  @Permissions('subscriptions.read')
+  @Permissions('subscriptions.manage')
   @Get('admin/stats')
   @ApiOperation({ summary: 'Récupérer les statistiques des abonnements (SuperAdmin)' })
   getAdminStats() {
     return this.service.getAdminStats();
+  }
+
+  @ApiBearerAuth()
+  @Permissions('subscriptions.read')
+  @Get('vendor/stats')
+  @ApiOperation({ summary: 'Récupérer les statistiques de mon abonnement (Vendeur)' })
+  getVendorStats() {
+    return this.service.getVendorSubscriptionStats();
   }
 
   @Public()
@@ -27,6 +35,7 @@ export class SubscriptionsController {
   }
 
   @ApiBearerAuth()
+  @Permissions('subscriptions.manage')
   @Get('admin/plans')
   @ApiOperation({ summary: 'Récupérer tous les plans (admin)' })
   findAll() {
@@ -34,6 +43,7 @@ export class SubscriptionsController {
   }
 
   @ApiBearerAuth()
+  @Permissions('subscriptions.manage')
   @Post('admin/plans')
   @ApiOperation({ summary: 'Créer un nouveau plan' })
   create(@Body() data: any) {
@@ -41,6 +51,7 @@ export class SubscriptionsController {
   }
 
   @ApiBearerAuth()
+  @Permissions('subscriptions.manage')
   @Patch('admin/plans/:id')
   @ApiOperation({ summary: 'Modifier un plan' })
   update(@Param('id') id: string, @Body() data: any) {
@@ -48,6 +59,7 @@ export class SubscriptionsController {
   }
 
   @ApiBearerAuth()
+  @Permissions('subscriptions.manage')
   @Delete('admin/plans/:id')
   @ApiOperation({ summary: 'Supprimer un plan' })
   remove(@Param('id') id: string) {
@@ -55,6 +67,7 @@ export class SubscriptionsController {
   }
 
   @ApiBearerAuth()
+  @Permissions('subscriptions.manage')
   @Post('seed')
   @ApiOperation({ summary: 'Initialiser les plans par défaut' })
   seed() {
@@ -62,6 +75,7 @@ export class SubscriptionsController {
   }
 
   @ApiBearerAuth()
+  @Permissions('subscriptions.read')
   @Post('subscribe/:planId')
   @ApiOperation({ summary: 'Souscrire à un plan' })
   subscribe(@Param('planId') planId: string, @Req() req: any) {

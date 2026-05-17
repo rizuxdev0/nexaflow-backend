@@ -5,6 +5,9 @@ export class InvoiceNumberingConfig {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @Column({ default: 'FAC' })
   prefix: string;
 

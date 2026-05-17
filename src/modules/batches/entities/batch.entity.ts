@@ -10,6 +10,7 @@ import {
 import { Product } from '../../products/entities/product.entity';
 import { Warehouse } from '../../warehouses/entities/warehouse.entity';
 import { Supplier } from '../../suppliers/entities/supplier.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 export enum BatchStatus {
   ACTIVE = 'active',
@@ -83,6 +84,13 @@ export class ProductBatch {
     default: BatchStatus.ACTIVE,
   })
   status: BatchStatus;
+
+  @ManyToOne(() => Vendor, { nullable: true })
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @Column({ nullable: true, type: 'text' })
   notes: string;

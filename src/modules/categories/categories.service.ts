@@ -207,14 +207,3 @@ export class CategoriesService extends AbstractTenantService<Category> {
       .replace(/^-+|-+$/g, '');
   }
 }
-
-  //   private generateSlug(name: string): string {
-  //     return slugify.default(name, {
-  //       // ← Si vous utilisez import * as slugify
-  //       lower: true,
-  //       strict: true,
-  //       locale: 'fr',
-  //       trim: true,
-  //     });
-  //   }
-}

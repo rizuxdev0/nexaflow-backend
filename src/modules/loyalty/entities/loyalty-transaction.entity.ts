@@ -23,6 +23,9 @@ export class LoyaltyTransaction {
   @Column({ nullable: true })
   rewardId: string;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 }

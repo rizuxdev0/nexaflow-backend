@@ -28,7 +28,7 @@ export class Product {
   @Column({ length: 200 })
   name: string;
 
-  @Column({ unique: true, length: 200 })
+  @Column({ length: 200 })
   slug: string;
 
   @Column({ type: 'text' })
@@ -37,7 +37,7 @@ export class Product {
   @Column({ nullable: true })
   shortDescription: string;
 
-  @Column({ unique: true, length: 50, nullable: true })
+  @Column({ length: 50, nullable: true })
   sku: string;
 
   @Column({ nullable: true, length: 100 })

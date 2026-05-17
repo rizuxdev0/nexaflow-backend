@@ -53,6 +53,9 @@ export class Notification {
   @CreateDateColumn()
   createdAt: Date;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @UpdateDateColumn()
   updatedAt: Date;
 }

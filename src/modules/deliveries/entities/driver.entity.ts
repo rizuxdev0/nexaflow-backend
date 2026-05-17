@@ -52,6 +52,9 @@ export class Driver {
   @CreateDateColumn()
   createdAt: Date;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @UpdateDateColumn()
   updatedAt: Date;
 }

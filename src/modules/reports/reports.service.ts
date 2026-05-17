@@ -6,6 +6,7 @@ import { Product } from '../products/entities/product.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { StockMovement } from '../stock/entities/stock-movement.entity';
 import { Expense, ExpenseStatus } from '../expenses/entities/expense.entity';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class ReportsService {
@@ -20,13 +21,20 @@ export class ReportsService {
     private readonly movementRepository: Repository<StockMovement>,
     @InjectRepository(Expense)
     private readonly expenseRepository: Repository<Expense>,
+    private readonly tenantService: TenantService,
   ) {}
+
+  private get orderRepo() { return this.tenantService.tenantRepo(this.orderRepository); }
+  private get productRepo() { return this.tenantService.tenantRepo(this.productRepository); }
+  private get customerRepo() { return this.tenantService.tenantRepo(this.customerRepository); }
+  private get movementRepo() { return this.tenantService.tenantRepo(this.movementRepository); }
+  private get expenseRepo() { return this.tenantService.tenantRepo(this.expenseRepository); }
 
   async getSalesOverview(startDate?: Date | string, endDate?: Date | string, branchId?: string, sellerId?: string) {
     const start = startDate ? new Date(startDate) : new Date(new Date().setMonth(new Date().getMonth() - 1));
     const end = endDate ? new Date(endDate) : new Date();
 
-    const orderQuery = this.orderRepository.createQueryBuilder('o')
+    const orderQuery = this.orderRepo.createQueryBuilder('o')
       .leftJoinAndSelect('o.items', 'item')
       .leftJoinAndSelect('item.product', 'product')
       .where('o.createdAt BETWEEN :start AND :end', { start, end })
@@ -53,7 +61,7 @@ export class ReportsService {
       });
     });
 
-    const expenseQuery = this.expenseRepository.createQueryBuilder('e')
+    const expenseQuery = this.expenseRepo.createQueryBuilder('e')
       .where('e.date BETWEEN :start AND :end', { start, end })
       .andWhere('e.status = :status', { status: ExpenseStatus.PAID });
 
@@ -84,8 +92,7 @@ export class ReportsService {
   }
 
   async getTopProducts(limit = 10) {
-    // This requires joining with OrderItems
-    const result = await this.orderRepository
+    const result = await this.orderRepo
       .createQueryBuilder('o')
       .innerJoin('o.items', 'item')
       .select('item.productName', 'name')
@@ -104,15 +111,14 @@ export class ReportsService {
   }
 
   async getCustomerIntelligence() {
-    const totalCustomers = await this.customerRepository.count();
-    const activeCustomers = await this.orderRepository
+    const totalCustomers = await this.customerRepo.count();
+    const activeCustomers = await this.orderRepo
       .createQueryBuilder('o')
       .select('DISTINCT(o.customerId)')
       .where('o.createdAt > :monthAgo', { monthAgo: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) })
       .getCount();
 
-    // Average Customer Lifetime Value?
-    const revenueSum = await this.orderRepository
+    const revenueSum = await this.orderRepo
       .createQueryBuilder('o')
       .select('SUM(o.total)', 'total')
       .where('o.paymentStatus = :status', { status: PaymentStatus.PAID })
@@ -128,7 +134,7 @@ export class ReportsService {
   }
 
   async getInventoryAnalytics() {
-    const products = await this.productRepository.find();
+    const products = await this.productRepo.find();
     
     const lowStock = products.filter(p => p.stock <= p.minStock).length;
     const outOfStock = products.filter(p => p.stock <= 0).length;

@@ -22,7 +22,7 @@ export class Customer {
   @Column({ length: 100 })
   lastName: string;
 
-  @Column({ unique: true })
+  @Column()
   email: string;
 
   @Column({ nullable: true, length: 30 })

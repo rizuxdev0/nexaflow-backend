@@ -21,6 +21,9 @@ export class CreditNote {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @Column({ unique: true })
   creditNoteNumber: string;
 

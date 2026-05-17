@@ -121,6 +121,9 @@ export class Vendor {
   @Column({ type: 'text', nullable: true })
   notes: string;
 
+  @Column({ default: false })
+  setupCompleted: boolean;
+
   @OneToOne(() => User, { nullable: true })
   @JoinColumn()
   user: User;

@@ -28,10 +28,15 @@ import { Order } from './entities/order.entity';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('orders')
 @Controller('orders')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
@@ -50,6 +55,7 @@ export class OrdersController {
   }
 
   @Post('pos')
+  @Permissions('orders.create')
   @ApiOperation({ summary: 'Créer une commande depuis le point de vente (POS)' })
   @ApiResponse({ status: 201, description: 'Commande créée avec succès' })
   @HttpCode(HttpStatus.CREATED)
@@ -62,6 +68,7 @@ export class OrdersController {
 
   @Public()
   @Post()
+  @Permissions('orders.create')
   @ApiOperation({ summary: 'Créer une commande (Ecommerce ou autre)' })
   @ApiResponse({ status: 201, description: 'Commande créée avec succès' })
   @HttpCode(HttpStatus.CREATED)
@@ -83,6 +90,7 @@ export class OrdersController {
   }
 
   @Patch(':id/status')
+  @Permissions('orders.update')
   @ApiOperation({ summary: 'Mettre à jour le statut d\'une commande' })
   @ApiParam({ name: 'id', description: 'ID de la commande' })
   @ApiResponse({ status: 200, description: 'Statut mis à jour' })
@@ -95,6 +103,7 @@ export class OrdersController {
   }
 
   @Get()
+  @Permissions('orders.read')
   @ApiOperation({ summary: 'Liste paginée des commandes' })
   @ApiResponse({ status: 200, description: 'Liste des commandes' })
   findAll(
@@ -116,6 +125,7 @@ export class OrdersController {
   }
 
   @Get('stats')
+  @Permissions('orders.read')
   @ApiOperation({ summary: 'Obtenir les statistiques des commandes selon les filtres' })
   @ApiResponse({ status: 200, description: 'Statistiques des commandes' })
   getStats(
@@ -125,6 +135,7 @@ export class OrdersController {
       filterDto.status,
       filterDto.paymentStatus,
       filterDto.paymentMethod,
+      filterDto.source,
       filterDto.customerId,
       filterDto.userId,
       filterDto.search || filterDto.orderNumber,
@@ -134,6 +145,7 @@ export class OrdersController {
   }
 
   @Get('recent')
+  @Permissions('orders.read')
   @ApiOperation({ summary: 'Dernières commandes récentes' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Nombre de commandes à retourner (max 50)' })
   @ApiResponse({ status: 200, description: 'Liste des commandes récentes' })
@@ -142,6 +154,7 @@ export class OrdersController {
   }
 
   @Get('cross-search')
+  @Permissions('orders.read')
   @ApiOperation({ summary: 'Recherche croisée de clients (marketing ciblé)' })
   @ApiQuery({ name: 'boughtId', description: 'ID du produit acheté' })
   @ApiQuery({ name: 'notBoughtId', description: 'ID du produit non acheté' })
@@ -153,6 +166,7 @@ export class OrdersController {
   }
 
   @Get(':id')
+  @Permissions('orders.read')
   @ApiOperation({ summary: "Détail d'une commande" })
   @ApiParam({ name: 'id', description: 'ID de la commande' })
   @ApiResponse({ status: 200, description: 'Commande trouvée' })

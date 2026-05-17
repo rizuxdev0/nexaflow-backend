@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('vendors')
 @ApiBearerAuth()
@@ -21,7 +22,8 @@ export class VendorsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Liste des vendeurs' })
+  @Permissions('marketplace.manage')
+  @ApiOperation({ summary: 'Liste des vendeurs (SuperAdmin uniquement)' })
   findAll(
     @Query('page') page: number = 1,
     @Query('pageSize') pageSize: number = 20,
@@ -32,33 +34,35 @@ export class VendorsController {
   }
 
   @Get('stats')
-  @ApiOperation({ summary: 'Statistiques de la marketplace' })
+  @Permissions('marketplace.manage')
+  @ApiOperation({ summary: 'Statistiques de la marketplace (SuperAdmin uniquement)' })
   getStats() {
     return this.vendorsService.getStats();
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Détail d\'un vendeur' })
+  @Permissions('marketplace.manage')
+  @ApiOperation({ summary: 'Détail d\'un vendeur (SuperAdmin uniquement)' })
   findOne(@Param('id') id: string) {
     return this.vendorsService.findOne(id);
   }
 
   @Post()
-  @Roles('admin', 'super_admin')
+  @Permissions('marketplace.manage')
   @ApiOperation({ summary: 'Créer un vendeur' })
   create(@Body() data: any) {
     return this.vendorsService.create(data);
   }
 
   @Patch(':id')
-  @Roles('admin', 'super_admin')
+  @Permissions('marketplace.manage')
   @ApiOperation({ summary: 'Modifier un vendeur' })
   update(@Param('id') id: string, @Body() data: any) {
     return this.vendorsService.update(id, data);
   }
 
   @Patch(':id/status')
-  @Roles('admin', 'super_admin')
+  @Permissions('marketplace.manage')
   @ApiOperation({ summary: 'Changer le statut d\'un vendeur' })
   updateStatus(
     @Param('id') id: string,
@@ -69,7 +73,7 @@ export class VendorsController {
   }
 
   @Delete(':id')
-  @Roles('admin', 'super_admin')
+  @Permissions('marketplace.manage')
   @ApiOperation({ summary: 'Supprimer un vendeur' })
   remove(@Param('id') id: string) {
     return this.vendorsService.remove(id);

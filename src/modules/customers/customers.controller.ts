@@ -29,15 +29,19 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('customers')
 @Controller('customers')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @Post()
+  @Permissions('customers.create')
   @ApiOperation({ summary: 'Créer un nouveau client' })
   @ApiResponse({ status: 201, description: 'Client créé avec succès' })
   @ApiResponse({ status: 409, description: 'Email déjà existant' })
@@ -47,6 +51,7 @@ export class CustomersController {
   }
 
   @Get('stats')
+  @Permissions('customers.read')
   @ApiOperation({ summary: 'Statistiques globales des clients' })
   @ApiResponse({ status: 200, description: 'Statistiques globales' })
   getGlobalStats() {
@@ -54,6 +59,7 @@ export class CustomersController {
   }
 
   @Get()
+  @Permissions('customers.read')
   @ApiOperation({ summary: 'Liste paginée des clients' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
@@ -71,6 +77,7 @@ export class CustomersController {
   }
 
   @Get('top')
+  @Permissions('customers.read')
   @ApiOperation({ summary: 'Top clients par montant dépensé' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Liste des meilleurs clients' })
@@ -79,6 +86,7 @@ export class CustomersController {
   }
 
   @Get('top-loyal')
+  @Permissions('customers.read')
   @ApiOperation({ summary: 'Top clients par points de fidélité' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Liste des clients les plus fidèles' })
@@ -87,6 +95,7 @@ export class CustomersController {
   }
 
   @Get('email/:email')
+  @Permissions('customers.read')
   @ApiOperation({ summary: "Détail d'un client par email" })
   @ApiParam({ name: 'email', description: 'Email du client' })
   @ApiResponse({ status: 200, description: 'Client trouvé' })
@@ -99,7 +108,12 @@ export class CustomersController {
   @ApiOperation({ summary: "Récupérer mon propre profil client" })
   @ApiResponse({ status: 200, description: 'Profil trouvé' })
   async findMe(@CurrentUser() user: any): Promise<Customer> {
-    return this.customersService.findByEmail(user.email);
+    return this.customersService.findOrCreateByEmail(user.email, {
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      source: 'ecommerce'
+    });
   }
 
   @Patch('me')
@@ -114,6 +128,7 @@ export class CustomersController {
   }
 
   @Get(':id')
+  @Permissions('customers.read')
   @ApiOperation({ summary: "Détail d'un client" })
   @ApiParam({ name: 'id', description: 'ID du client' })
   @ApiResponse({ status: 200, description: 'Client trouvé' })
@@ -123,6 +138,7 @@ export class CustomersController {
   }
 
   @Get(':id/orders')
+  @Permissions('customers.read')
   @ApiOperation({ summary: "Commandes d'un client" })
   @ApiParam({ name: 'id', description: 'ID du client' })
   @ApiResponse({ status: 200, description: 'Commandes du client' })
@@ -132,6 +148,7 @@ export class CustomersController {
   }
 
   @Patch(':id')
+  @Permissions('customers.update')
   @ApiOperation({ summary: 'Modifier un client' })
   @ApiParam({ name: 'id', description: 'ID du client' })
   @ApiResponse({ status: 200, description: 'Client modifié' })
@@ -145,6 +162,7 @@ export class CustomersController {
   }
 
   @Delete(':id')
+  @Permissions('customers.delete')
   @ApiOperation({ summary: 'Supprimer un client' })
   @ApiParam({ name: 'id', description: 'ID du client' })
   @ApiResponse({ status: 204, description: 'Client supprimé' })
@@ -155,6 +173,7 @@ export class CustomersController {
   }
 
   @Patch(':id/toggle')
+  @Permissions('customers.update')
   @ApiOperation({ summary: 'Activer/Désactiver un client' })
   @ApiParam({ name: 'id', description: 'ID du client' })
   @ApiResponse({ status: 200, description: 'Statut modifié' })
@@ -164,6 +183,7 @@ export class CustomersController {
   }
 
   @Patch(':id/points')
+  @Permissions('customers.update')
   @ApiOperation({ summary: 'Ajouter/retirer des points fidélité' })
   @ApiParam({ name: 'id', description: 'ID du client' })
   @ApiResponse({ status: 200, description: 'Points mis à jour' })

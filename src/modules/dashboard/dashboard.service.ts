@@ -5,19 +5,37 @@ import { Order } from '../orders/entities/order.entity';
 import { OrderItem } from '../orders/entities/order-item.entity';
 import { Product } from '../products/entities/product.entity';
 import { Customer } from '../customers/entities/customer.entity';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class DashboardService {
   constructor(
     @InjectRepository(Order)
-    private ordersRepo: Repository<Order>,
+    private readonly ordersRepository: Repository<Order>,
     @InjectRepository(OrderItem)
-    private itemsRepo: Repository<OrderItem>,
+    private readonly itemsRepository: Repository<OrderItem>,
     @InjectRepository(Product)
-    private productsRepo: Repository<Product>,
+    private readonly productsRepository: Repository<Product>,
     @InjectRepository(Customer)
-    private customersRepo: Repository<Customer>,
+    private readonly customersRepository: Repository<Customer>,
+    private readonly tenantService: TenantService,
   ) {}
+
+  private get ordersRepo() {
+    return this.tenantService.tenantRepo(this.ordersRepository);
+  }
+
+  private get itemsRepo() {
+    return this.tenantService.tenantRepo(this.itemsRepository);
+  }
+
+  private get productsRepo() {
+    return this.tenantService.tenantRepo(this.productsRepository);
+  }
+
+  private get customersRepo() {
+    return this.tenantService.tenantRepo(this.customersRepository);
+  }
 
   async getStats() {
     const totalOrders = await this.ordersRepo.count();

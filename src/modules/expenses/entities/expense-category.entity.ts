@@ -11,7 +11,7 @@ export class ExpenseCategory {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   name: string;
 
   @Column({ nullable: true })
@@ -19,6 +19,9 @@ export class ExpenseCategory {
 
   @Column({ default: true })
   isActive: boolean;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @CreateDateColumn()
   createdAt: Date;

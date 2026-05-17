@@ -13,10 +13,12 @@ import { Payout } from './entities/payout.entity';
 import { CommissionService } from './commission.service';
 import { PayoutsService } from './payouts.service';
 import { ProductsModule } from '../products/products.module';
+import { User } from '../users/entities/user.entity';
+import { Role } from '../roles/entities/role.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Vendor, CommissionRule, Payout]),
+    TypeOrmModule.forFeature([Vendor, CommissionRule, Payout, User, Role]),
     ProductsModule,
   ],
   controllers: [

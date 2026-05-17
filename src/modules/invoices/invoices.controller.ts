@@ -36,6 +36,7 @@ import {
   Query,
   HttpStatus,
   HttpCode,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -50,16 +51,22 @@ import { InvoiceFilterDto } from './dto/invoice-filter.dto';
 import { UpdateInvoiceStatusDto } from './dto/update-invoice-status.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('invoices')
 @Controller('invoices')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
 
   // ============ LISTE PAGINÉE ============
 
   @Get()
+  @Permissions('invoices.read')
   @ApiOperation({ summary: 'Liste paginée des factures' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
@@ -82,6 +89,7 @@ export class InvoicesController {
   // ============ STATISTIQUES ============
 
   @Get('stats')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: 'Statistiques des factures' })
   @ApiQuery({ name: 'startDate', required: false, type: Date })
   @ApiQuery({ name: 'endDate', required: false, type: Date })
@@ -98,6 +106,7 @@ export class InvoicesController {
   }
 
   @Get('check-overdue')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: 'Vérifier et marquer les factures en retard' })
   @ApiResponse({
     status: 200,
@@ -111,6 +120,7 @@ export class InvoicesController {
   // ============ FACTURE PAR COMMANDE ============
 
   @Get('by-order/:orderId')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: 'Facture par ID de commande' })
   @ApiParam({ name: 'orderId', description: 'ID de la commande' })
   @ApiResponse({ status: 200, description: 'Facture trouvée' })
@@ -122,6 +132,7 @@ export class InvoicesController {
   }
 
   @Get('by-order-number/:orderNumber')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: 'Facture par numéro de commande' })
   @ApiParam({ name: 'orderNumber', description: 'Numéro de commande' })
   @ApiResponse({ status: 200, description: 'Facture trouvée' })
@@ -135,12 +146,14 @@ export class InvoicesController {
   // ============ NUMBERING CONFIG ============
 
   @Get('config/numbering')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: 'Récupérer la configuration de numérotation' })
   getNumberingConfig() {
     return this.invoicesService.getNumberingConfig();
   }
 
   @Patch('config/numbering')
+  @Permissions('invoices.update')
   @ApiOperation({ summary: 'Mettre à jour la configuration de numérotation' })
   updateNumberingConfig(@Body() data: any) {
     return this.invoicesService.updateNumberingConfig(data);
@@ -149,12 +162,14 @@ export class InvoicesController {
   // ============ CREDIT NOTES ============
 
   @Get('credit-notes')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: 'Liste des avoirs' })
   getCreditNotes(@Query('invoiceId') invoiceId?: string) {
     return this.invoicesService.getCreditNotes(invoiceId);
   }
 
   @Post('credit-notes')
+  @Permissions('invoices.create')
   @ApiOperation({ summary: 'Créer un avoir' })
   createCreditNote(@Body() data: any) {
     return this.invoicesService.createCreditNote(data);
@@ -163,6 +178,7 @@ export class InvoicesController {
   // ============ GÉNÉRATION DE FACTURE ============
 
   @Post('from-order/:orderId')
+  @Permissions('invoices.create')
   @ApiOperation({ summary: 'Créer une facture depuis une commande' })
   @ApiParam({ name: 'orderId', description: 'ID de la commande' })
   @ApiResponse({ status: 201, description: 'Facture créée avec succès' })
@@ -178,6 +194,7 @@ export class InvoicesController {
   // ============ DÉTAIL FACTURE ============
 
   @Get(':id')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: "Détail d'une facture" })
   @ApiParam({ name: 'id', description: 'ID de la facture' })
   @ApiResponse({ status: 200, description: 'Facture trouvée' })
@@ -187,6 +204,7 @@ export class InvoicesController {
   }
 
   @Get('number/:invoiceNumber')
+  @Permissions('invoices.read')
   @ApiOperation({ summary: "Détail d'une facture par son numéro" })
   @ApiParam({ name: 'invoiceNumber', description: 'Numéro de facture' })
   @ApiResponse({ status: 200, description: 'Facture trouvée' })
@@ -201,6 +219,7 @@ export class InvoicesController {
   // ============ CHANGEMENT DE STATUT ============
 
   @Patch(':id/status')
+  @Permissions('invoices.update')
   @ApiOperation({ summary: "Changer le statut d'une facture" })
   @ApiParam({ name: 'id', description: 'ID de la facture' })
   @ApiResponse({ status: 200, description: 'Statut mis à jour' })
@@ -214,6 +233,7 @@ export class InvoicesController {
   }
 
   @Post(':id/send-email')
+  @Permissions('invoices.update')
   @ApiOperation({ summary: 'Envoyer la facture par email' })
   @ApiParam({ name: 'id', description: 'ID de la facture' })
   sendByEmail(@Param('id') id: string) {
@@ -221,6 +241,7 @@ export class InvoicesController {
   }
 
   @Patch(':id/convert')
+  @Permissions('invoices.update')
   @ApiOperation({ summary: 'Convertir la devise de la facture' })
   @ApiParam({ name: 'id', description: 'ID de la facture' })
   convertCurrency(
@@ -233,6 +254,7 @@ export class InvoicesController {
   // ============ ACTIONS SUPPLÉMENTAIRES ============
 
   @Post(':id/send-reminder')
+  @Permissions('invoices.update')
   @ApiOperation({ summary: 'Envoyer un rappel de paiement' })
   @ApiParam({ name: 'id', description: 'ID de la facture' })
   @ApiResponse({ status: 200, description: 'Rappel envoyé' })
@@ -247,6 +269,7 @@ export class InvoicesController {
   }
 
   @Post('send-reminders')
+  @Permissions('invoices.update')
   @ApiOperation({
     summary: 'Envoyer les rappels pour toutes les factures en retard',
   })

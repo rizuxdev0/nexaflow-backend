@@ -3,13 +3,17 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType } from './entities/notification.entity';
 import { CreateNotificationDto } from './dto/notification.dto';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class NotificationsService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
+    private readonly tenantService: TenantService,
   ) {}
+
+  private get repo() { return this.tenantService.tenantRepo(this.notificationRepository); }
 
   async findAll(query: { userId?: string; customerId?: string; isRead?: boolean; page?: number; pageSize?: number }, isAdmin = false) {
     const { userId, customerId, isRead, page = 1, pageSize = 20 } = query;
@@ -26,7 +30,7 @@ export class NotificationsService {
 
     if (isRead !== undefined) where.isRead = isRead;
 
-    const [data, total] = await this.notificationRepository.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -37,16 +41,17 @@ export class NotificationsService {
   }
 
   async findOne(id: string) {
-    const notif = await this.notificationRepository.findOne({ where: { id } });
+    const notif = await this.repo.findOne({ where: { id } });
     if (!notif) throw new NotFoundException('Notification non trouvée');
     return notif;
   }
 
   async create(dto: CreateNotificationDto) {
-    const notif = this.notificationRepository.create(dto);
-    const saved = await this.notificationRepository.save(notif);
-    
-    // In real, should emit through WebSocket Gateway
+    const notif = this.repo.create({
+      ...dto,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    const saved = await this.repo.save(notif);
     return saved;
   }
 
@@ -55,7 +60,7 @@ export class NotificationsService {
       type: NotificationType.STOCK,
       title: 'Alerte stock bas',
       message: `Le produit ${productName} (${sku}) est à ${currentStock} unités (Seuil atteint)`,
-      link: `/admin/stock`, // UI link
+      link: `/admin/stock`,
     });
   }
 
@@ -111,11 +116,11 @@ export class NotificationsService {
   async markRead(id: string) {
     const notif = await this.findOne(id);
     notif.isRead = true;
-    return this.notificationRepository.save(notif);
+    return this.repo.save(notif);
   }
 
   async markAllRead(userId?: string, customerId?: string) {
-    const qb = this.notificationRepository.createQueryBuilder()
+    const qb = this.repo.createQueryBuilder()
       .update(Notification)
       .set({ isRead: true })
       .where('isRead = :isRead', { isRead: false });
@@ -123,11 +128,9 @@ export class NotificationsService {
     if (customerId) {
        qb.andWhere('customerId = :customerId', { customerId });
     } else if (userId) {
-       // Admins mark their specific ones OR general ones (userId IS NULL)
        qb.andWhere('(userId = :userId OR userId IS NULL)', { userId });
-       qb.andWhere('customerId IS NULL'); // Don't mark customer notifications!
+       qb.andWhere('customerId IS NULL');
     } else {
-       // Fallback
        qb.andWhere('customerId IS NULL');
     }
 
@@ -136,6 +139,6 @@ export class NotificationsService {
 
   async remove(id: string) {
     const notif = await this.findOne(id);
-    return this.notificationRepository.remove(notif);
+    return this.repo.remove(notif);
   }
 }

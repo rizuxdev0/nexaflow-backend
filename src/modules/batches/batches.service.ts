@@ -9,8 +9,12 @@ import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
 
 
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
+
+
 @Injectable()
-export class BatchesService {
+export class BatchesService extends AbstractTenantService<ProductBatch> {
   constructor(
     @InjectRepository(ProductBatch)
     private readonly batchRepository: Repository<ProductBatch>,
@@ -19,7 +23,18 @@ export class BatchesService {
     @InjectRepository(Warehouse)
     private readonly warehousesRepository: Repository<Warehouse>,
     private readonly auditService: AuditService,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(batchRepository, tenantService, 'ProductBatch');
+  }
+
+  private get productRepo() {
+    return this.tenantService.tenantRepo(this.productsRepository);
+  }
+
+  private get warehouseRepo() {
+    return this.tenantService.tenantRepo(this.warehousesRepository);
+  }
 
   async findAll(query: { page?: number; pageSize?: number; status?: string; warehouseId?: string, productId?: string, batchNumber?: string, search?: string }) {
     const { page = 1, pageSize = 20, status, warehouseId, productId, batchNumber, search } = query;
@@ -29,10 +44,10 @@ export class BatchesService {
     if (productId) where.productId = productId;
     if (batchNumber) where.batchNumber = batchNumber;
     if (search) {
-      where.batchNumber = search; // Simplification, in reality might want to use ILike or Like
+      where.batchNumber = search;
     }
 
-    const [data, total] = await this.batchRepository.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -44,7 +59,7 @@ export class BatchesService {
   }
 
   async getById(id: string) {
-    const batch = await this.batchRepository.findOne({ 
+    const batch = await this.repo.findOne({ 
       where: { id },
       relations: ['product', 'warehouse', 'supplier']
     });
@@ -53,7 +68,7 @@ export class BatchesService {
   }
 
   async getByProduct(productId: string) {
-    return this.batchRepository.find({
+    return this.repo.find({
       where: { productId },
       relations: ['warehouse'],
       order: { expirationDate: 'ASC' }
@@ -61,25 +76,25 @@ export class BatchesService {
   }
 
   async create(dto: CreateBatchDto) {
-    const product = await this.productsRepository.findOne({ where: { id: dto.productId } });
+    const product = await this.productRepo.findOne({ where: { id: dto.productId } });
     if (!product) throw new NotFoundException('Product not found');
     
-    const warehouse = await this.warehousesRepository.findOne({ where: { id: dto.warehouseId } });
+    const warehouse = await this.warehouseRepo.findOne({ where: { id: dto.warehouseId } });
     if (!warehouse) throw new NotFoundException('Warehouse not found');
 
-    // Duplicate batchNumber?
-    const existing = await this.batchRepository.findOne({ where: { batchNumber: dto.batchNumber } });
+    const existing = await this.repo.findOne({ where: { batchNumber: dto.batchNumber } });
     if (existing) throw new BadRequestException('Batch number already exists');
 
-    const batch = this.batchRepository.create({
+    const batch = this.repo.create({
       ...dto,
       productName: product.name,
       warehouseName: warehouse.name,
       remainingQuantity: dto.quantity,
       receivedDate: dto.receivedDate || new Date(),
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
 
-    const saved = await this.batchRepository.save(batch);
+    const saved = await this.repo.save(batch);
 
     // Update global product stock?
     product.stock += dto.quantity;
@@ -104,7 +119,7 @@ export class BatchesService {
     if (dto.reason) {
       batch.notes = batch.notes ? `${batch.notes}\n[Status Change: ${oldStatus} -> ${dto.status}] ${dto.reason}` : `[Status Change: ${oldStatus} -> ${dto.status}] ${dto.reason}`;
     }
-    const saved = await this.batchRepository.save(batch);
+    const saved = await this.repo.save(batch);
 
     await this.auditService.log({
       userName: 'Admin',
@@ -123,13 +138,13 @@ export class BatchesService {
     if (dto.quantity > batch.remainingQuantity) throw new BadRequestException('Insufficient stock in this batch');
 
     batch.remainingQuantity -= dto.quantity;
-    await this.batchRepository.save(batch);
+    await this.repo.save(batch);
 
     // Update product global stock
-    const product = await this.productsRepository.findOne({ where: { id: batch.productId } });
+    const product = await this.productRepo.findOne({ where: { id: batch.productId } });
     if (product) {
       product.stock -= dto.quantity;
-      await this.productsRepository.save(product);
+      await this.productRepo.save(product);
     }
 
     await this.auditService.log({
@@ -148,13 +163,13 @@ export class BatchesService {
     if (original.status !== BatchStatus.ACTIVE) throw new BadRequestException('Can only split active batches');
     if (dto.splitQuantity >= original.remainingQuantity) throw new BadRequestException('Split quantity must be less than remaining');
 
-    const targetWh = await this.warehousesRepository.findOne({ where: { id: dto.targetWarehouseId } });
+    const targetWh = await this.warehouseRepo.findOne({ where: { id: dto.targetWarehouseId } });
     if (!targetWh) throw new NotFoundException('Target Warehouse not found');
 
     original.remainingQuantity -= dto.splitQuantity;
-    await this.batchRepository.save(original);
+    await this.repo.save(original);
 
-    const newBatch = this.batchRepository.create({
+    const newBatch = this.repo.create({
       ...original,
       id: undefined,
       batchNumber: `${original.batchNumber}-${Date.now().toString().slice(-4)}`,
@@ -164,10 +179,11 @@ export class BatchesService {
       warehouseName: targetWh.name,
       notes: `Scission depuis lot ${original.batchNumber}`,
       createdAt: undefined,
-      updatedAt: undefined
+      updatedAt: undefined,
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
 
-    const savedNew = await this.batchRepository.save(newBatch);
+    const savedNew = await this.repo.save(newBatch);
 
     await this.auditService.log({
       userName: 'Admin',
@@ -185,14 +201,14 @@ export class BatchesService {
     const batch = await this.getById(id);
     if (batch.status !== BatchStatus.ACTIVE) throw new BadRequestException('Can only transfer active batches');
     
-    const targetWh = await this.warehousesRepository.findOne({ where: { id: dto.targetWarehouseId } });
+    const targetWh = await this.warehouseRepo.findOne({ where: { id: dto.targetWarehouseId } });
     if (!targetWh) throw new NotFoundException('Target Warehouse not found');
 
     const oldWhName = batch.warehouseName;
     batch.warehouseId = dto.targetWarehouseId;
     batch.warehouseName = targetWh.name;
 
-    const saved = await this.batchRepository.save(batch);
+    const saved = await this.repo.save(batch);
 
     await this.auditService.log({
       userName: 'Admin',
@@ -214,7 +230,7 @@ export class BatchesService {
     batch.status = newStatus;
     batch.notes = batch.notes ? `${batch.notes}\n${qcNote}` : qcNote;
 
-    const saved = await this.batchRepository.save(batch);
+    const saved = await this.repo.save(batch);
 
     await this.auditService.log({
       userName: 'Admin',
@@ -229,17 +245,15 @@ export class BatchesService {
 
   async markExpired() {
     const now = new Date();
-    const expired = await this.batchRepository.find({
+    const expired = await this.repo.find({
       where: {
         status: BatchStatus.ACTIVE,
         expirationDate: MoreThan(new Date(0)), 
-        // Need to check where expirationDate < now
       }
     });
 
-    // Actually, Better use query builder for date comparison
-    const result = await this.batchRepository
-      .createQueryBuilder()
+    const result = await this.repo
+      .createQueryBuilder('b')
       .update(ProductBatch)
       .set({ status: BatchStatus.EXPIRED })
       .where("status = :active", { active: BatchStatus.ACTIVE })
@@ -265,7 +279,7 @@ export class BatchesService {
     const soon = new Date();
     soon.setDate(now.getDate() + Number(days));
 
-    return await this.batchRepository.find({
+    return await this.repo.find({
       where: {
         status: BatchStatus.ACTIVE,
         expirationDate: Between(now, soon),
@@ -278,7 +292,7 @@ export class BatchesService {
 
   async getExpired() {
     const now = new Date();
-    return await this.batchRepository.find({
+    return await this.repo.find({
       where: [
         { status: BatchStatus.EXPIRED },
         { status: BatchStatus.ACTIVE, expirationDate: Between(new Date(0), now) }
@@ -294,18 +308,18 @@ export class BatchesService {
     const soon = new Date();
     soon.setDate(soon.getDate() + 30);
 
-    const total = await this.batchRepository.count();
-    const active = await this.batchRepository.count({ where: { status: BatchStatus.ACTIVE } });
-    const expired = await this.batchRepository.count({ where: { status: BatchStatus.EXPIRED } });
-    const quarantine = await this.batchRepository.count({ where: { status: BatchStatus.QUARANTINE } });
-    const expiringSoon = await this.batchRepository
+    const total = await this.repo.count();
+    const active = await this.repo.count({ where: { status: BatchStatus.ACTIVE } });
+    const expired = await this.repo.count({ where: { status: BatchStatus.EXPIRED } });
+    const quarantine = await this.repo.count({ where: { status: BatchStatus.QUARANTINE } });
+    const expiringSoon = await this.repo
       .createQueryBuilder('b')
       .where('b.status = :active', { active: BatchStatus.ACTIVE })
       .andWhere('b.expirationDate <= :soon', { soon })
       .andWhere('b.expirationDate > :now', { now })
       .getCount();
 
-    const sums = await this.batchRepository
+    const sums = await this.repo
       .createQueryBuilder('b')
       .select('SUM(b.remainingQuantity)', 'totalRemaining')
       .addSelect('SUM(b.quantity)', 'totalInitial')

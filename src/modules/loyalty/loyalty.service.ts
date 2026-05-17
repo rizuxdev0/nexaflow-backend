@@ -7,6 +7,7 @@ import { CreateLoyaltyRewardDto } from './dto/create-loyalty-reward.dto';
 import { UpdateLoyaltyRewardDto } from './dto/update-loyalty-reward.dto';
 import { EarnPointsDto, RedeemRewardDto } from './dto/transaction.dto';
 import { CustomersService } from '../customers/customers.service';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class LoyaltyService {
@@ -16,7 +17,16 @@ export class LoyaltyService {
     @InjectRepository(LoyaltyTransaction)
     private readonly transactionRepository: Repository<LoyaltyTransaction>,
     private readonly customersService: CustomersService,
+    private readonly tenantService: TenantService,
   ) {}
+
+  private get rewardRepo() {
+    return this.tenantService.tenantRepo(this.rewardRepository);
+  }
+
+  private get transactionRepo() {
+    return this.tenantService.tenantRepo(this.transactionRepository);
+  }
 
   getConfig() {
     return {
@@ -32,12 +42,8 @@ export class LoyaltyService {
   }
 
   async getStats() {
-    // 1. Point statistics
     const pointStats = await this.customersService.getLoyaltyStats();
-
-    // 2. Tier distribution
     const tierRaw = await this.customersService.getTierDistribution();
-    // Reformat for the frontend (ensure all tiers are represented)
     const tiers = ['bronze', 'silver', 'gold', 'platinum'];
     const tierDistribution = tiers.map(t => {
       const found = tierRaw.find(r => r.loyaltyTier === t);
@@ -47,11 +53,10 @@ export class LoyaltyService {
       };
     });
 
-    // 3. Transactions analytics (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const transactionTrends = await this.transactionRepository
+    const transactionTrends = await this.transactionRepo
       .createQueryBuilder('tx')
       .select("DATE(tx.createdAt)", "date")
       .addSelect("SUM(CASE WHEN tx.type = 'earn' THEN 1 ELSE 0 END)", "earnCount")
@@ -61,8 +66,7 @@ export class LoyaltyService {
       .orderBy("date", "ASC")
       .getRawMany();
 
-    // 4. Global transaction counts
-    const globalTx = await this.transactionRepository
+    const globalTx = await this.transactionRepo
       .createQueryBuilder('tx')
       .select("SUM(CASE WHEN tx.type = 'earn' THEN 1 ELSE 0 END)", "totalEarn")
       .addSelect("SUM(CASE WHEN tx.type = 'redeem' THEN 1 ELSE 0 END)", "totalRedeem")
@@ -89,7 +93,7 @@ export class LoyaltyService {
   }
 
   async getRewards(page = 1, pageSize = 20) {
-    const [data, total] = await this.rewardRepository.findAndCount({
+    const [data, total] = await this.rewardRepo.findAndCount({
       skip: (page - 1) * pageSize,
       take: pageSize,
       order: { createdAt: 'DESC' },
@@ -98,12 +102,12 @@ export class LoyaltyService {
   }
 
   async getActiveRewards() {
-    return this.rewardRepository.find({ where: { isActive: true, stock: MoreThan(0) } });
+    return this.rewardRepo.find({ where: { isActive: true, stock: MoreThan(0) } });
   }
 
   async getTransactions(customerId?: string, page = 1, pageSize = 20) {
     const where = customerId ? { customerId } : {};
-    const [data, total] = await this.transactionRepository.findAndCount({
+    const [data, total] = await this.transactionRepo.findAndCount({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -113,15 +117,18 @@ export class LoyaltyService {
   }
 
   async createReward(dto: CreateLoyaltyRewardDto) {
-    const reward = this.rewardRepository.create(dto);
-    return this.rewardRepository.save(reward);
+    const reward = this.rewardRepo.create({
+      ...dto,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    return this.rewardRepo.save(reward);
   }
 
   async updateReward(id: string, dto: UpdateLoyaltyRewardDto) {
-    const reward = await this.rewardRepository.findOne({ where: { id } });
+    const reward = await this.rewardRepo.findOne({ where: { id } });
     if (!reward) throw new NotFoundException('Reward not found');
     Object.assign(reward, dto);
-    return this.rewardRepository.save(reward);
+    return this.rewardRepo.save(reward);
   }
 
   async earnPoints(dto: EarnPointsDto) {
@@ -129,14 +136,15 @@ export class LoyaltyService {
     const customer = await this.customersService.findOne(customerId);
     if (!customer) throw new NotFoundException('Customer not found');
 
-    const txn = this.transactionRepository.create({
+    const txn = this.transactionRepo.create({
       customerId,
       type: 'earn',
       points,
       description: `Achat commande #${orderId}`,
       orderId,
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
-    await this.transactionRepository.save(txn);
+    await this.transactionRepo.save(txn);
 
     await this.customersService.updatePoints(customerId, { operation: 'add' as any, points });
     return txn;
@@ -145,36 +153,34 @@ export class LoyaltyService {
   async redeemReward(dto: RedeemRewardDto) {
     const { customerId, rewardId } = dto;
     
-    // Check reward
-    const reward = await this.rewardRepository.findOne({ where: { id: rewardId } });
+    const reward = await this.rewardRepo.findOne({ where: { id: rewardId } });
     if (!reward) throw new NotFoundException('Reward not found');
     if (!reward.isActive || reward.stock <= 0) throw new BadRequestException('Reward not available');
 
-    // Check customer
     const customer = await this.customersService.findOne(customerId);
     if (!customer) throw new NotFoundException('Customer not found');
     if (customer.loyaltyPoints < reward.pointsCost) {
       throw new BadRequestException('Not enough points');
     }
 
-    // Deduct stock, deduct points, create transaction
     reward.stock -= 1;
-    await this.rewardRepository.save(reward);
+    await this.rewardRepo.save(reward);
     
     await this.customersService.updatePoints(customerId, { operation: 'remove' as any, points: reward.pointsCost });
 
-    const txn = this.transactionRepository.create({
+    const txn = this.transactionRepo.create({
       customerId,
       type: 'redeem',
       points: -reward.pointsCost,
       description: `Échange: ${reward.name}`,
       rewardId,
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
-    return this.transactionRepository.save(txn);
+    return this.transactionRepo.save(txn);
   }
 
   async hasEarnedPoints(orderId: string): Promise<boolean> {
-    const existing = await this.transactionRepository.findOne({
+    const existing = await this.transactionRepo.findOne({
       where: { orderId, type: 'earn' }
     });
     return !!existing;

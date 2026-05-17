@@ -22,6 +22,9 @@ export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @Column({ unique: true })
   invoiceNumber: string;
 

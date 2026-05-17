@@ -29,6 +29,9 @@ export class LoyaltyReward {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

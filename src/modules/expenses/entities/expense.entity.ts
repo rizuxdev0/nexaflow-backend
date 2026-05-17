@@ -60,6 +60,9 @@ export class Expense {
   })
   status: ExpenseStatus;
 
+  @Column({ nullable: true })
+  vendorId: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

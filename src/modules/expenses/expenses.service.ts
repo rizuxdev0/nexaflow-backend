@@ -4,19 +4,31 @@ import { Repository, Between } from 'typeorm';
 import { Expense, ExpenseStatus } from './entities/expense.entity';
 import { ExpenseCategory } from './entities/expense-category.entity';
 import { CreateExpenseDto, UpdateExpenseDto, CreateExpenseCategoryDto } from './dto/expense.dto';
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class ExpensesService {
+export class ExpensesService extends AbstractTenantService<Expense> {
   constructor(
     @InjectRepository(Expense)
-    private readonly expenseRepo: Repository<Expense>,
+    private readonly expenseRepository: Repository<Expense>,
     @InjectRepository(ExpenseCategory)
-    private readonly categoryRepo: Repository<ExpenseCategory>,
-  ) {}
+    private readonly categoryRepository: Repository<ExpenseCategory>,
+    tenantService: TenantService,
+  ) {
+    super(expenseRepository, tenantService, 'Expense');
+  }
+
+  private get categoryRepo() {
+    return this.tenantService.tenantRepo(this.categoryRepository);
+  }
 
   // Categories
   async createCategory(dto: CreateExpenseCategoryDto) {
-    const cat = this.categoryRepo.create(dto);
+    const cat = this.categoryRepo.create({
+      ...dto,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
     return this.categoryRepo.save(cat);
   }
 
@@ -32,7 +44,7 @@ export class ExpensesService {
     if (categoryId) where.categoryId = categoryId;
     if (startDate && endDate) where.date = Between(new Date(startDate), new Date(endDate));
 
-    const [data, total] = await this.expenseRepo.findAndCount({
+    const [data, total] = await this.repo.findAndCount({
       where,
       relations: ['category', 'branch'],
       skip: (page - 1) * pageSize,
@@ -44,25 +56,29 @@ export class ExpensesService {
   }
 
   async findOne(id: string) {
-    const exp = await this.expenseRepo.findOne({ where: { id }, relations: ['category', 'branch'] });
+    const exp = await this.repo.findOne({ where: { id }, relations: ['category', 'branch'] });
     if (!exp) throw new NotFoundException('Dépense non trouvée');
     return exp;
   }
 
   async create(dto: CreateExpenseDto, userId: string) {
-    const exp = this.expenseRepo.create({ ...dto, recordedById: userId });
-    return this.expenseRepo.save(exp);
+    const exp = this.repo.create({ 
+      ...dto, 
+      recordedById: userId,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    return this.repo.save(exp);
   }
 
   async update(id: string, dto: UpdateExpenseDto) {
     const exp = await this.findOne(id);
     Object.assign(exp, dto);
-    return this.expenseRepo.save(exp);
+    return this.repo.save(exp);
   }
 
   async remove(id: string) {
     const exp = await this.findOne(id);
-    return this.expenseRepo.remove(exp);
+    return this.repo.remove(exp);
   }
 
   async getSummary(branchId?: string, startDate?: string, endDate?: string) {
@@ -70,11 +86,11 @@ export class ExpensesService {
     if (branchId) where.branchId = branchId;
     if (startDate && endDate) where.date = Between(new Date(startDate), new Date(endDate));
 
-    const expenses = await this.expenseRepo.find({ where, relations: ['category'] });
+    const expenses = await this.repo.find({ where, relations: ['category'] });
     
     const total = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
     const byCategory = expenses.reduce((acc, e) => {
-      const name = e.category.name;
+      const name = e.category?.name || 'Inconnue';
       acc[name] = (acc[name] || 0) + Number(e.amount);
       return acc;
     }, {});

@@ -79,4 +79,9 @@ export class CreateUserDto {
   @IsUUID('all', { each: true })
   @IsOptional()
   extraPermissionIds?: string[];
+
+  @ApiPropertyOptional({ description: 'ID du magasin (succursale)', example: 'uuid-du-magasin' })
+  @IsUUID()
+  @IsOptional()
+  branchId?: string;
 }

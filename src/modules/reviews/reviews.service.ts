@@ -117,6 +117,15 @@ export class ReviewsService extends AbstractTenantService<Review> {
     return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
   }
 
+  async findAll(page: number = 1, pageSize: number = 20) {
+    const [data, total] = await this.repo.findAndCount({
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      order: { createdAt: 'DESC' } as any,
+    });
+    return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+  }
+
   async moderate(id: string, moderateDto: ModerateReviewDto): Promise<Review> {
     const review = await this.findOne(id);
     review.status = moderateDto.status;

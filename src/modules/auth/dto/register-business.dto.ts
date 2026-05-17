@@ -43,6 +43,11 @@ export class RegisterBusinessDto {
   @IsOptional()
   country?: string;
 
+  @ApiProperty({ example: 'Dakar' })
+  @IsString()
+  @IsOptional()
+  city?: string;
+
   @ApiProperty({ example: 'starter' })
   @IsString()
   @IsOptional()

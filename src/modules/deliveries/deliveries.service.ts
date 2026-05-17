@@ -7,6 +7,7 @@ import { Order, OrderStatus, DeliveryStatus } from '../orders/entities/order.ent
 import { CreateDeliveryZoneDto, UpdateDeliveryZoneDto, CalculateShippingDto } from './dto/delivery.dto';
 import { CreateDriverDto, UpdateDriverDto, AssignDeliveryDto, UpdateDeliveryStatusDto, UpdateDriverLocationDto } from './dto/driver.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TenantService } from '../../common/tenant/tenant.service';
 
 @Injectable()
 export class DeliveriesService {
@@ -18,10 +19,15 @@ export class DeliveriesService {
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
     private readonly notificationsService: NotificationsService,
+    private readonly tenantService: TenantService,
   ) {}
 
+  private get zoneRepo() { return this.tenantService.tenantRepo(this.zoneRepository); }
+  private get driverRepo() { return this.tenantService.tenantRepo(this.driverRepository); }
+  private get orderRepo() { return this.tenantService.tenantRepo(this.orderRepository); }
+
   async getZones(page: number = 1, pageSize: number = 20) {
-    const [data, total] = await this.zoneRepository.findAndCount({
+    const [data, total] = await this.zoneRepo.findAndCount({
       skip: (page - 1) * pageSize,
       take: pageSize,
       order: { createdAt: 'DESC' }
@@ -30,32 +36,35 @@ export class DeliveriesService {
   }
 
   async getAllZones() {
-    return this.zoneRepository.find({
+    return this.zoneRepo.find({
       order: { name: 'ASC' }
     });
   }
 
   async createZone(dto: CreateDeliveryZoneDto): Promise<DeliveryZone> {
-    const zone = this.zoneRepository.create(dto);
-    return this.zoneRepository.save(zone);
+    const zone = this.zoneRepo.create({
+      ...dto,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    return this.zoneRepo.save(zone);
   }
 
   async updateZone(id: string, dto: UpdateDeliveryZoneDto): Promise<DeliveryZone> {
-    const zone = await this.zoneRepository.findOne({ where: { id } });
+    const zone = await this.zoneRepo.findOne({ where: { id } });
     if (!zone) throw new NotFoundException('Zone non trouvée');
     Object.assign(zone, dto);
-    return this.zoneRepository.save(zone);
+    return this.zoneRepo.save(zone);
   }
 
   async deleteZone(id: string): Promise<void> {
-    const zone = await this.zoneRepository.findOne({ where: { id } });
+    const zone = await this.zoneRepo.findOne({ where: { id } });
     if (!zone) throw new NotFoundException('Zone non trouvée');
-    await this.zoneRepository.remove(zone);
+    await this.zoneRepo.remove(zone);
   }
 
   // --- Core Calculation ---
   async calculateShipping(dto: CalculateShippingDto) {
-    const zones = await this.zoneRepository.find({ where: { isActive: true } });
+    const zones = await this.zoneRepo.find({ where: { isActive: true } });
     const zone = zones.find(z => z.cities.map(c => c.toLowerCase()).includes(dto.city.toLowerCase()));
 
     if (!zone) {
@@ -83,7 +92,7 @@ export class DeliveriesService {
 
   // --- Driver Management ---
   async getDrivers(page: number = 1, pageSize: number = 20) {
-    const [data, total] = await this.driverRepository.findAndCount({
+    const [data, total] = await this.driverRepo.findAndCount({
       skip: (page - 1) * pageSize,
       take: pageSize,
       order: { name: 'ASC' }
@@ -92,29 +101,36 @@ export class DeliveriesService {
   }
 
   async createDriver(dto: CreateDriverDto) {
-    const driver = this.driverRepository.create(dto);
-    return this.driverRepository.save(driver);
+    const driver = this.driverRepo.create({
+      ...dto,
+      vendorId: this.tenantService.getVendorId() || undefined,
+    });
+    return this.driverRepo.save(driver);
   }
 
   async updateDriver(id: string, dto: UpdateDriverDto) {
-    await this.driverRepository.update(id, dto);
-    return this.driverRepository.findOne({ where: { id } });
+    const driver = await this.driverRepo.findOne({ where: { id } });
+    if (!driver) throw new NotFoundException('Livreur non trouvé');
+    Object.assign(driver, dto);
+    return this.driverRepo.save(driver);
   }
 
   async deleteDriver(id: string) {
-    return this.driverRepository.delete(id);
+    const driver = await this.driverRepo.findOne({ where: { id } });
+    if (!driver) throw new NotFoundException('Livreur non trouvé');
+    return this.driverRepo.remove(driver);
   }
 
   // --- Delivery Assignments ---
   async assignDelivery(dto: AssignDeliveryDto) {
-    const order = await this.orderRepository.findOne({ where: { id: dto.orderId } });
-    const driver = await this.driverRepository.findOne({ where: { id: dto.driverId } });
+    const order = await this.orderRepo.findOne({ where: { id: dto.orderId } });
+    const driver = await this.driverRepo.findOne({ where: { id: dto.driverId } });
 
     if (!order || !driver) throw new NotFoundException('Commande ou Livreur non trouvé');
 
     order.driverId = driver.id;
     order.deliveryStatus = DeliveryStatus.ASSIGNED;
-    const savedOrder = await this.orderRepository.save(order);
+    const savedOrder = await this.orderRepo.save(order);
     
     await this.notificationsService.notifyDeliveryUpdate(
       order.orderNumber, 
@@ -127,7 +143,7 @@ export class DeliveriesService {
   }
 
   async updateDeliveryStatus(orderId: string, dto: UpdateDeliveryStatusDto) {
-    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    const order = await this.orderRepo.findOne({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Commande non trouvée');
 
     order.deliveryStatus = dto.status as any;
@@ -137,7 +153,7 @@ export class DeliveriesService {
     }
     if (dto.notes) order.notes = (order.notes || '') + '\n' + dto.notes;
 
-    const savedOrder = await this.orderRepository.save(order);
+    const savedOrder = await this.orderRepo.save(order);
     
     await this.notificationsService.notifyDeliveryUpdate(
       order.orderNumber, 
@@ -150,14 +166,14 @@ export class DeliveriesService {
   }
 
   async getPendingDeliveries() {
-    return this.orderRepository.find({
+    return this.orderRepo.find({
       where: { deliveryStatus: DeliveryStatus.PENDING },
       relations: ['customer']
     });
   }
 
   async getActiveDeliveries() {
-    return this.orderRepository.find({
+    return this.orderRepo.find({
       where: { 
         deliveryStatus: In(['assigned', 'picked_up', 'out_for_delivery'] as any) 
       },
@@ -166,13 +182,13 @@ export class DeliveriesService {
   }
 
   async updateLocation(dto: UpdateDriverLocationDto) {
-    const driver = await this.driverRepository.findOne({ where: { id: dto.driverId } });
+    const driver = await this.driverRepo.findOne({ where: { id: dto.driverId } });
     if (!driver) throw new NotFoundException('Livreur non trouvé');
 
     driver.latitude = parseFloat(dto.latitude);
     driver.longitude = parseFloat(dto.longitude);
     driver.lastLocationUpdate = new Date();
 
-    return this.driverRepository.save(driver);
+    return this.driverRepo.save(driver);
   }
 }

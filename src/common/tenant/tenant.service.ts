@@ -1,14 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { Repository, ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 import { tenantLocalStorage } from './tenant.context';
 
 @Injectable()
 export class TenantService {
+  /**
+   * Retrieves the current vendorId from the request context.
+   */
   getVendorId(): string | null {
     const context = tenantLocalStorage.getStore();
     return context?.vendorId || null;
   }
 
+  /**
+   * Retrieves the vendorId or throws an error if not found.
+   */
   getVendorIdOrThrow(): string {
     const vendorId = this.getVendorId();
     if (!vendorId) {
@@ -19,22 +25,18 @@ export class TenantService {
 
   /**
    * Wraps a TypeORM repository with a proxy that automatically injects 
-   * the vendorId into all read queries (find, findOne, count, etc.).
-   * This ensures SQL-level isolation at the source.
+   * the vendorId into all read queries.
    */
-  tenantRepo<T>(repository: Repository<T>): Repository<T> {
-    const vendorId = this.getVendorId();
-    
-    // If no vendor context (e.g. SuperAdmin or Public access), 
-    // we don't apply the automatic filter.
-    if (!vendorId) return repository;
-
+  tenantRepo<T extends ObjectLiteral>(repository: Repository<T>): Repository<T> {
+    const self = this;
     return new Proxy(repository, {
       get: (target, prop) => {
         const originalMethod = target[prop];
         if (typeof originalMethod !== 'function') return originalMethod;
 
-        // List of methods that support 'where' options
+        const vendorId = self.getVendorId();
+
+        // Methods that support 'where' options
         const queryMethods = [
           'find', 
           'findOne', 
@@ -49,13 +51,12 @@ export class TenantService {
 
         if (queryMethods.includes(prop as string)) {
           return (...args: any[]) => {
-            let options = args[0] || {};
+            if (!vendorId) return originalMethod.apply(target, args);
 
-            // Handle TypeORM 0.3 style (where options are often the first arg)
+            let options = args[0] || {};
             if (typeof options === 'object') {
               if (!options.where) options.where = {};
               
-              // Handle array of conditions (OR logic)
               if (Array.isArray(options.where)) {
                 options.where = options.where.map((condition: any) => ({
                   ...condition,
@@ -69,12 +70,42 @@ export class TenantService {
               }
               args[0] = options;
             }
-
             return originalMethod.apply(target, args);
           };
         }
 
-        // Methods that don't need wrapping or aren't query-based
+        // Robust QueryBuilder wrapping
+        if (prop === 'createQueryBuilder') {
+          return (...args: any[]) => {
+            const builder = originalMethod.apply(target, args) as SelectQueryBuilder<T>;
+            if (!vendorId) return builder;
+
+            const alias = args[0] || builder.alias;
+            
+            // We wrap the execution methods to ensure vendorId is added AT THE END,
+            // avoiding being overwritten by previous .where() calls.
+            const executionMethods = [
+              'getOne', 'getMany', 'getCount', 'getRawOne', 'getRawMany', 'getManyAndCount'
+            ];
+
+            return new Proxy(builder, {
+              get: (bTarget, bProp) => {
+                const bMethod = bTarget[bProp];
+                if (typeof bMethod !== 'function') return bMethod;
+
+                if (executionMethods.includes(bProp as string)) {
+                  return (...bArgs: any[]) => {
+                    // Inject vendorId just before execution
+                    bTarget.andWhere(`${alias}.vendorId = :tenantVendorId`, { tenantVendorId: vendorId });
+                    return bMethod.apply(bTarget, bArgs);
+                  };
+                }
+                return bMethod.bind(bTarget);
+              }
+            });
+          };
+        }
+
         return originalMethod.bind(target);
       },
     }) as Repository<T>;

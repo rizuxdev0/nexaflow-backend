@@ -121,6 +121,7 @@ export class ProductsController {
   }
 
   @Get('low-stock')
+  @Permissions('products.read')
   @ApiOperation({ summary: 'Produits avec stock faible' })
   @ApiQuery({ name: 'threshold', required: false, type: Number })
   @ApiResponse({
@@ -132,6 +133,7 @@ export class ProductsController {
   }
 
   @Get('out-of-stock')
+  @Permissions('products.read')
   @ApiOperation({ summary: 'Produits en rupture de stock' })
   @ApiResponse({ status: 200, description: 'Liste des produits en rupture' })
   getOutOfStock(): Promise<Product[]> {
@@ -224,6 +226,7 @@ export class ProductsController {
   }
 
   @Put(':id')
+  @Permissions('products.update')
   @ApiOperation({ summary: 'Modifier un produit' })
   @ApiParam({ name: 'id', description: 'ID du produit' })
   @ApiResponse({ status: 200, description: 'Produit modifié' })
@@ -237,6 +240,7 @@ export class ProductsController {
   }
 
   @Delete(':id')
+  @Permissions('products.delete')
   @ApiOperation({ summary: 'Supprimer un produit' })
   @ApiParam({ name: 'id', description: 'ID du produit' })
   @ApiResponse({ status: 204, description: 'Produit supprimé' })
@@ -247,6 +251,7 @@ export class ProductsController {
   }
 
   @Patch(':id/toggle')
+  @Permissions('products.update')
   @ApiOperation({ summary: 'Activer/Désactiver un produit' })
   @ApiParam({ name: 'id', description: 'ID du produit' })
   @ApiResponse({ status: 200, description: 'Statut modifié' })
@@ -256,6 +261,7 @@ export class ProductsController {
   }
 
   @Patch(':id/featured')
+  @Permissions('products.update')
   @ApiOperation({ summary: 'Mettre/Enlever en vedette' })
   @ApiParam({ name: 'id', description: 'ID du produit' })
   @ApiResponse({ status: 200, description: 'Statut vedette modifié' })
@@ -265,6 +271,7 @@ export class ProductsController {
   }
 
   @Patch(':id/stock')
+  @Permissions('products.update')
   @ApiOperation({ summary: 'Modifier le stock' })
   @ApiParam({ name: 'id', description: 'ID du produit' })
   @ApiResponse({ status: 200, description: 'Stock modifié' })

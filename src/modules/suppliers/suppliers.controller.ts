@@ -10,6 +10,7 @@ import {
   HttpStatus,
   HttpCode,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -26,14 +27,20 @@ import { Supplier } from './entities/supplier.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 import { Public } from 'src/common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('suppliers')
 @Controller('suppliers')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 
   @Post()
+  @Permissions('suppliers.create')
   @ApiOperation({ summary: 'Créer un nouveau fournisseur' })
   @ApiResponse({ status: 201, description: 'Fournisseur créé avec succès' })
   @ApiResponse({ status: 409, description: 'Code ou email déjà existant' })
@@ -43,6 +50,7 @@ export class SuppliersController {
   }
 
   @Get()
+  @Permissions('suppliers.read')
   @ApiOperation({ summary: 'Liste paginée des fournisseurs' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'pageSize', required: false, type: Number })
@@ -59,6 +67,7 @@ export class SuppliersController {
   }
 
   @Get('stats')
+  @Permissions('suppliers.read')
   @ApiOperation({ summary: 'Statistiques globales des fournisseurs' })
   @ApiResponse({ status: 200, description: 'Statistiques calculées' })
   getStats(): Promise<any> {
@@ -66,6 +75,7 @@ export class SuppliersController {
   }
 
   @Get('flat')
+  @Permissions('suppliers.read')
   @ApiOperation({ summary: 'Liste plate de tous les fournisseurs actifs (pour dropdowns)' })
   @ApiResponse({ status: 200, description: 'Liste des fournisseurs actifs' })
   findAllFlat(): Promise<Supplier[]> {
@@ -73,6 +83,7 @@ export class SuppliersController {
   }
 
   @Get('top')
+  @Permissions('suppliers.read')
   @ApiOperation({ summary: 'Top fournisseurs par note' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Liste des meilleurs fournisseurs' })
@@ -81,6 +92,7 @@ export class SuppliersController {
   }
 
   @Get(':id')
+  @Permissions('suppliers.read')
   @ApiOperation({ summary: "Détail d'un fournisseur" })
   @ApiParam({ name: 'id', description: 'ID du fournisseur' })
   @ApiResponse({ status: 200, description: 'Fournisseur trouvé' })
@@ -90,6 +102,7 @@ export class SuppliersController {
   }
 
   @Get('code/:code')
+  @Permissions('suppliers.read')
   @ApiOperation({ summary: "Détail d'un fournisseur par son code" })
   @ApiParam({ name: 'code', description: 'Code du fournisseur' })
   @ApiResponse({ status: 200, description: 'Fournisseur trouvé' })
@@ -99,6 +112,7 @@ export class SuppliersController {
   }
 
   @Put(':id')
+  @Permissions('suppliers.update')
   @ApiOperation({ summary: 'Modifier un fournisseur (complet)' })
   @ApiParam({ name: 'id', description: 'ID du fournisseur' })
   @ApiResponse({ status: 200, description: 'Fournisseur modifié' })
@@ -112,6 +126,7 @@ export class SuppliersController {
   }
 
   @Patch(':id')
+  @Permissions('suppliers.update')
   @ApiOperation({ summary: 'Modifier un fournisseur (partiel)' })
   @ApiParam({ name: 'id', description: 'ID du fournisseur' })
   @ApiResponse({ status: 200, description: 'Fournisseur modifié' })
@@ -125,6 +140,7 @@ export class SuppliersController {
   }
 
   @Delete(':id')
+  @Permissions('suppliers.delete')
   @ApiOperation({ summary: 'Supprimer un fournisseur' })
   @ApiParam({ name: 'id', description: 'ID du fournisseur' })
   @ApiResponse({ status: 204, description: 'Fournisseur supprimé' })
@@ -136,6 +152,7 @@ export class SuppliersController {
   }
 
   @Patch(':id/toggle')
+  @Permissions('suppliers.update')
   @ApiOperation({ summary: 'Activer/Désactiver un fournisseur' })
   @ApiParam({ name: 'id', description: 'ID du fournisseur' })
   @ApiResponse({ status: 200, description: 'Statut modifié' })

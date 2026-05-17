@@ -10,6 +10,7 @@ import {
   HttpStatus,
   HttpCode,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,14 +28,20 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { PermissionsGuard } from '../../common/guards/permissions.guard';
+import { Permissions } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('categories')
 @Controller('categories')
 @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Post()
+  @Permissions('categories.create')
   @ApiOperation({ summary: 'Créer une nouvelle catégorie' })
   @ApiResponse({ status: 201, description: 'Catégorie créée avec succès' })
   @ApiResponse({ status: 409, description: 'Catégorie déjà existante' })
@@ -97,6 +104,7 @@ export class CategoriesController {
   }
 
   @Put(':id')
+  @Permissions('categories.update')
   @ApiOperation({ summary: 'Modifier une catégorie' })
   @ApiParam({ name: 'id', description: 'ID de la catégorie' })
   @ApiResponse({ status: 200, description: 'Catégorie modifiée' })
@@ -109,6 +117,7 @@ export class CategoriesController {
   }
 
   @Delete(':id')
+  @Permissions('categories.delete')
   @ApiOperation({ summary: 'Supprimer une catégorie' })
   @ApiParam({ name: 'id', description: 'ID de la catégorie' })
   @ApiResponse({ status: 204, description: 'Catégorie supprimée' })
@@ -120,6 +129,7 @@ export class CategoriesController {
   }
 
   @Patch(':id/toggle')
+  @Permissions('categories.update')
   @ApiOperation({ summary: 'Activer/Désactiver une catégorie' })
   @ApiParam({ name: 'id', description: 'ID de la catégorie' })
   @ApiResponse({ status: 200, description: 'Statut modifié' })

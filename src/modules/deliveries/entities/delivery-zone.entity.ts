@@ -8,7 +8,7 @@ export class DeliveryZone {
   @Column()
   name: string;
 
-  @Column({ unique: true })
+  @Column()
   code: string;
 
   @Column({ type: 'simple-array' })
@@ -31,6 +31,9 @@ export class DeliveryZone {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @UpdateDateColumn()
   updatedAt: Date;

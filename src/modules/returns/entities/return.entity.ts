@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
+import { Vendor } from '../../vendors/entities/vendor.entity';
 
 export enum ReturnStatus {
   PENDING = 'pending',
@@ -92,6 +93,13 @@ export class ProductReturn {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  @ManyToOne(() => Vendor)
+  @JoinColumn({ name: 'vendorId' })
+  vendor: Vendor;
+
+  @Column({ nullable: true })
+  vendorId: string;
 
   @UpdateDateColumn()
   updatedAt: Date;

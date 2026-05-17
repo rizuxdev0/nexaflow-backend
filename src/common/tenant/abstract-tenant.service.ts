@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { Repository, ObjectLiteral } from 'typeorm';
 import { TenantService } from './tenant.service';
 import { NotFoundException } from '@nestjs/common';
 
@@ -23,14 +23,16 @@ export abstract class AbstractTenantService<T extends { id: string; vendorId?: s
   /**
    * Standard find all for the current tenant.
    */
-  async findAll(options: any = {}) {
-    return this.repo.find(options);
+  async findAll(...args: any[]): Promise<any> {
+    return this.repo.find(args[0] || {});
   }
 
   /**
    * Standard find one by ID for the current tenant.
    */
-  async findOne(id: string, relations: string[] = []) {
+  async findOne(...args: any[]): Promise<any> {
+    const id = args[0] as string;
+    const relations = args[1] || [];
     const item = await this.repo.findOne({ 
       where: { id } as any,
       relations 
@@ -42,7 +44,8 @@ export abstract class AbstractTenantService<T extends { id: string; vendorId?: s
   /**
    * Standard remove for the current tenant.
    */
-  async remove(id: string) {
+  async remove(...args: any[]): Promise<any> {
+    const id = args[0] as string;
     const item = await this.findOne(id);
     return this.repo.remove(item);
   }
@@ -50,7 +53,7 @@ export abstract class AbstractTenantService<T extends { id: string; vendorId?: s
   /**
    * Helper to wrap any other repository with tenant isolation.
    */
-  protected tenantRepo<R>(repository: Repository<R>): Repository<R> {
+  protected tenantRepo<R extends ObjectLiteral>(repository: Repository<R>): Repository<R> {
     return this.tenantService.tenantRepo(repository);
   }
 }

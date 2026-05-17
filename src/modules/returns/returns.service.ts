@@ -8,10 +8,11 @@ import { StockService } from '../stock/stock.service';
 import { StockMovementType } from '../stock/entities/stock-movement.entity';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../audit/entities/audit-log.entity';
-
+import { TenantService } from '../../common/tenant/tenant.service';
+import { AbstractTenantService } from '../../common/tenant/abstract-tenant.service';
 
 @Injectable()
-export class ReturnsService {
+export class ReturnsService extends AbstractTenantService<ProductReturn> {
   constructor(
     @InjectRepository(ProductReturn)
     private readonly returnRepository: Repository<ProductReturn>,
@@ -19,11 +20,18 @@ export class ReturnsService {
     private readonly orderRepository: Repository<Order>,
     private readonly stockService: StockService,
     private readonly auditService: AuditService,
-  ) {}
+    tenantService: TenantService,
+  ) {
+    super(returnRepository, tenantService, 'ProductReturn');
+  }
+
+  private get orderRepo() {
+    return this.tenantService.tenantRepo(this.orderRepository);
+  }
 
   async findAll(query: { page?: number; pageSize?: number; status?: string; search?: string }) {
     const { page = 1, pageSize = 20, status, search } = query;
-    const qb = this.returnRepository.createQueryBuilder('ret')
+    const qb = this.repo.createQueryBuilder('ret')
       .leftJoinAndSelect('ret.order', 'order')
       .orderBy('ret.createdAt', 'DESC');
 
@@ -41,7 +49,7 @@ export class ReturnsService {
   }
 
   async findOne(id: string) {
-    const ret = await this.returnRepository.findOne({ 
+    const ret = await this.repo.findOne({ 
       where: { id },
       relations: ['order']
     });
@@ -50,7 +58,7 @@ export class ReturnsService {
   }
 
   async findByCustomer(customerId: string) {
-    return this.returnRepository.find({
+    return this.repo.find({
       where: { customerId },
       order: { createdAt: 'DESC' },
       relations: ['order']
@@ -58,25 +66,25 @@ export class ReturnsService {
   }
 
   async create(dto: CreateReturnDto) {
-    const order = await this.orderRepository.findOne({ where: { id: dto.orderId } });
+    const order = await this.orderRepo.findOne({ where: { id: dto.orderId } });
     if (!order) throw new NotFoundException('Commande non trouvée');
 
     const returnNumber = await this.generateReturnNumber();
-    const ret = this.returnRepository.create({
+    const ret = this.repo.create({
       ...dto,
       returnNumber,
       status: ReturnStatus.PENDING,
       customerName: dto.customerName || order.customerName,
-      customerId: dto.customerId || order.customerId
+      customerId: dto.customerId || order.customerId,
+      vendorId: this.tenantService.getVendorId() || undefined,
     });
 
-    const saved = await this.returnRepository.save(ret);
+    const saved = await this.repo.save(ret);
 
     await this.auditService.log({
-      userName: 'Client/Admin', // Should pass from context
+      userName: 'Client/Admin',
       action: AuditAction.CREATE,
       resource: 'ProductReturn',
-
       resourceId: saved.id,
       details: `Demande de retour ${saved.returnNumber} créée pour la commande ${order.orderNumber}`
     });
@@ -88,13 +96,11 @@ export class ReturnsService {
     const ret = await this.findOne(id);
     const oldStatus = ret.status;
     
-    // Status transition validation
     if (oldStatus === ReturnStatus.REFUNDED || oldStatus === ReturnStatus.EXCHANGED) {
       throw new BadRequestException('Impossible de modifier un retour déjà traité');
     }
 
     if (dto.status === ReturnStatus.APPROVED && oldStatus === ReturnStatus.PENDING) {
-      // Restocking logic if applicable
       for (const item of ret.items) {
         if (item.restockable) {
           await this.stockService.createMovement({
@@ -119,14 +125,13 @@ export class ReturnsService {
     ret.processedAt = new Date();
     ret.processedBy = userId || null;
 
-    const saved = await this.returnRepository.save(ret);
+    const saved = await this.repo.save(ret);
 
     await this.auditService.log({
       userId,
       userName: 'Admin',
       action: AuditAction.UPDATE,
       resource: 'ProductReturn',
-
       resourceId: saved.id,
       details: `Statut retour ${saved.returnNumber} mis à jour : ${oldStatus} → ${saved.status}`
     });
@@ -137,7 +142,7 @@ export class ReturnsService {
   private async generateReturnNumber(): Promise<string> {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
-    const count = await this.returnRepository.count();
+    const count = await this.repo.count();
     const seq = (count + 1).toString().padStart(4, '0');
     return `RET-${year}${seq}`;
   }

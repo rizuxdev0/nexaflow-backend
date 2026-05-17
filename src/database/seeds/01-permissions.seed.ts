@@ -9,6 +9,7 @@ export async function seedPermissionsAndRoles(dataSource: DataSource) {
   const rolesService = new RolesService(
     dataSource.getRepository('Role'),
     dataSource.getRepository('Permission'),
+    null as any, // TenantService context is not required for system seeds
   );
 
   // Créer les permissions par défaut

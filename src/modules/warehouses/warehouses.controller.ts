@@ -19,20 +19,20 @@ export class WarehousesController {
   constructor(private readonly warehousesService: WarehousesService) {}
 
   @Get()
-  @Permissions('stock.read')
+  @Permissions('warehouses.read')
   findAll(@Query() query: any) {
     return this.warehousesService.findAll(query);
   }
 
   @Get(':id')
-  @Permissions('stock.read')
+  @Permissions('warehouses.read')
   findOne(@Param('id') id: string) {
     return this.warehousesService.findOne(id);
   }
 
   @Post()
   @Roles('admin', 'super_admin')
-  @Permissions('stock.update')
+  @Permissions('warehouses.create')
   @UseGuards(QuotaGuard)
   @CheckQuota('warehouses')
   create(@Body() dto: CreateWarehouseDto) {
@@ -41,14 +41,14 @@ export class WarehousesController {
 
   @Put(':id')
   @Roles('admin', 'super_admin')
-  @Permissions('stock.update')
+  @Permissions('warehouses.update')
   update(@Param('id') id: string, @Body() dto: UpdateWarehouseDto) {
     return this.warehousesService.update(id, dto);
   }
 
   @Delete(':id')
   @Roles('super_admin')
-  @Permissions('stock.delete')
+  @Permissions('warehouses.delete')
   remove(@Param('id') id: string) {
     return this.warehousesService.remove(id);
   }
