@@ -180,4 +180,18 @@ export class ShopController {
   ) {
     return this.shopService.recommendWarehouses(lat, lon, limit);
   }
+
+  @Public()
+  @Get('notifications')
+  @ApiOperation({ summary: 'Notifications du client de la boutique' })
+  @ApiQuery({ name: 'customerId', type: String, required: true })
+  @ApiResponse({ status: 200, description: 'Liste des notifications' })
+  async getShopNotifications(
+    @Query('customerId') customerId: string,
+    @Query('page') page: number = 1,
+    @Query('pageSize') pageSize: number = 20,
+  ) {
+    // Stub implementation to prevent 404s on the frontend until the full logic is implemented
+    return { data: [], total: 0, page, pageSize };
+  }
 }

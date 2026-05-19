@@ -10,9 +10,16 @@ export class CustomerEventsService {
     private eventRepository: Repository<CustomerEvent>,
   ) {}
 
-  async log(data: Partial<CustomerEvent>): Promise<CustomerEvent> {
-    const entry = this.eventRepository.create(data);
-    return await this.eventRepository.save(entry);
+  async log(data: Partial<CustomerEvent>): Promise<CustomerEvent | null> {
+    try {
+      const entry = this.eventRepository.create(data);
+      return await this.eventRepository.save(entry);
+    } catch (error) {
+      // Ignore foreign key violations (e.g. if a customer was deleted but their ID is still in local storage)
+      // and other DB errors to avoid crashing the request just for a tracking event
+      console.warn(`[CustomerEventsService] Failed to log event: ${error.message}`);
+      return null;
+    }
   }
 
   async findAll(page = 1, pageSize = 50, filters: any = {}): Promise<any> {
