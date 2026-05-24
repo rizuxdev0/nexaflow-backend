@@ -15,4 +15,5 @@ export class CreateBannerDto {
   @ApiPropertyOptional() @IsDateString() @IsOptional() startDate?: string;
   @ApiPropertyOptional() @IsDateString() @IsOptional() endDate?: string;
   @ApiPropertyOptional() @IsNumber() @IsOptional() priority?: number;
+  @ApiPropertyOptional() @IsString() @IsOptional() vendorId?: string;
 }
