@@ -71,6 +71,8 @@ import { CustomerEventsModule } from './modules/customer-events/customer-events.
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { TenantModule } from './common/tenant/tenant.module';
 import { TenantMiddleware } from './common/middleware/tenant.middleware';
+import { SetupModule } from './modules/setup/setup.module';
+import { PaymentsModule } from './modules/payments/payments.module';
 
 @Module({
   imports: [
@@ -178,6 +180,8 @@ import { TenantMiddleware } from './common/middleware/tenant.middleware';
     VendorsModule,
     CustomerEventsModule,
     TenantModule,
+    SetupModule,
+    PaymentsModule,
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',
