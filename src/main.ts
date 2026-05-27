@@ -314,13 +314,31 @@ async function bootstrap() {
     },
   );
 
-  // ============ START SERVER ============
+  // ============ FINALIZATION ============
 
-  const listenPort = process.env.PORT || port;
-  await app.listen(listenPort, '0.0.0.0');
-  console.log(`🚀 Application is running on: http://localhost:${listenPort}/api/v1`);
-  console.log(`📚 Swagger documentation: http://localhost:${listenPort}/api/v1/docs`);
-  console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🕐 Documentation generated: ${new Date().toLocaleString()}`);
+  await app.init();
+  return app;
 }
-bootstrap();
+
+let cachedServer: any;
+
+// Export for Vercel Serverless
+export default async (req: any, res: any) => {
+  if (!cachedServer) {
+    const app = await bootstrap();
+    cachedServer = app.getHttpAdapter().getInstance();
+  }
+  return cachedServer(req, res);
+};
+
+// Local development listener
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  bootstrap().then(async (app) => {
+    const listenPort = process.env.PORT || port;
+    await app.listen(listenPort, '0.0.0.0');
+    console.log(`🚀 Application is running on: http://localhost:${listenPort}/api/v1`);
+    console.log(`📚 Swagger documentation: http://localhost:${listenPort}/api/v1/docs`);
+    console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🕐 Documentation generated: ${new Date().toLocaleString()}`);
+  }).catch(console.error);
+}

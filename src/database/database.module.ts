@@ -17,8 +17,9 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         database: configService.get('DB_DATABASE', 'nexaflow'),
         entities: [__dirname + '/../**/*.entity{.ts,.js}'],
 
-        // Synchronisation (à désactiver en production)
-        synchronize: configService.get('NODE_ENV') !== 'production',
+        // Synchronisation (contrôlable via DB_SYNCHRONIZE, sinon auto en dev uniquement)
+        synchronize: configService.get('DB_SYNCHRONIZE') === 'true' 
+          || configService.get('NODE_ENV') !== 'production',
 
         // Logging
         logging: configService.get('NODE_ENV') === 'development',
